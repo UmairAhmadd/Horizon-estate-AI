@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* Reusable atoms ------------------------------------------------------- */
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-shell px-6 md:px-10;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-label text-stone;
+  }
+
+  /* Monochrome treatment for portraits (agents) — property photos stay in
+     natural colour; this keeps the brand's editorial black-and-white accent. */
+  .grayscale-img {
+    filter: grayscale(1) contrast(1.02);
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Hide scrollbar on horizontal chip rows while keeping scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
