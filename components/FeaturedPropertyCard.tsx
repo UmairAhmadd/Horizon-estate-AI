@@ -7,13 +7,14 @@ const SpecDot = () => <span className="text-stone/50">·</span>;
 
 export function FeaturedPropertyCard({ property }: { property: Property }) {
   const href = `/properties/${property.id}`;
+  const location = `${property.area}, ${property.city}`;
 
   return (
-    <article className="w-full max-w-sm rounded-2xl border border-line bg-paper/95 p-3 shadow-[0_20px_60px_-25px_rgba(10,10,10,0.35)] backdrop-blur-md">
+    <article className="w-full max-w-[19rem] rounded-2xl border border-line bg-paper/95 p-3 shadow-[0_20px_60px_-25px_rgba(10,10,10,0.35)] backdrop-blur-md">
       <div className="relative aspect-[4/3] overflow-hidden rounded-xl">
         <Link href={href} aria-label={`View ${property.title}`}>
           <Image
-            src={property.image}
+            src={property.images[0]}
             alt={property.title}
             fill
             sizes="(max-width: 768px) 90vw, 380px"
@@ -31,12 +32,12 @@ export function FeaturedPropertyCard({ property }: { property: Property }) {
           property={{
             id: property.id,
             title: property.title,
-            location: property.location,
-            price: property.price,
-            image: property.image,
-            beds: property.beds,
-            baths: property.baths,
-            area: property.area,
+            location,
+            price: property.displayPrice,
+            image: property.images[0],
+            beds: property.bedrooms,
+            baths: property.bathrooms,
+            area: property.size,
           }}
         />
       </div>
@@ -49,19 +50,23 @@ export function FeaturedPropertyCard({ property }: { property: Property }) {
                 {property.title}
               </Link>
             </h3>
-            <p className="mt-0.5 text-sm text-stone">{property.location}</p>
+            <p className="mt-0.5 text-sm text-stone">{location}</p>
           </div>
           <p className="whitespace-nowrap font-serif text-lg font-semibold">
-            {property.price}
+            {property.displayPrice}
           </p>
         </div>
 
         <div className="mt-4 flex items-center gap-2 border-t border-line pt-3 text-[13px] text-stone">
-          <span>{property.beds} Bed</span>
+          {property.bedrooms > 0 && (
+            <>
+              <span>{property.bedrooms} Bed</span>
+              <SpecDot />
+            </>
+          )}
+          <span>{property.bathrooms} Bath</span>
           <SpecDot />
-          <span>{property.baths} Bath</span>
-          <SpecDot />
-          <span>{property.area}</span>
+          <span>{property.size}</span>
         </div>
       </div>
     </article>

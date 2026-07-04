@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { generateAssistantResponse } from "@/lib/leadEngine";
-import type { AssistantRequest, ChatMessage } from "@/lib/types";
+import { dbEnabled } from "@/lib/db";
+import { loadLeadPreferences, recordTurn } from "@/lib/server/leadStore";
+import {
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+  newSessionId,
+  readSessionId,
+} from "@/lib/server/session";
+import type { AssistantRequest, ChatMessage, LeadFields } from "@/lib/types";
 
 // Runs on the Node.js runtime — ready for an SDK (e.g. OpenAI) later.
 export const runtime = "nodejs";
@@ -42,10 +50,31 @@ export async function POST(request: Request) {
 
   const history = isValidHistory(body.history) ? body.history : [];
 
-  // Single delegation point. When this becomes an async LLM call, just await it.
-  const response = generateAssistantResponse(message, history);
+  // Long-term memory only engages when a database is configured. Without it,
+  // this path is unchanged (no cookie, no persistence).
+  let sessionId: string | undefined;
+  let priorLead: LeadFields | null = null;
+  if (dbEnabled) {
+    sessionId = readSessionId(request) ?? newSessionId();
+    priorLead = await loadLeadPreferences(sessionId);
+  }
 
-  return NextResponse.json(response, { status: 200 });
+  // Delegates to an OpenAI-compatible provider when configured, else the mock.
+  const response = await generateAssistantResponse(message, history, priorLead);
+
+  const res = NextResponse.json(response, { status: 200 });
+
+  if (dbEnabled && sessionId) {
+    await recordTurn({ sessionId, userMessage: message, response });
+    res.cookies.set(SESSION_COOKIE, sessionId, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE,
+    });
+  }
+
+  return res;
 }
 
 // Guard other verbs with a clear signal rather than a default 404/500.

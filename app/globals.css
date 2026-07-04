@@ -24,12 +24,72 @@ body {
   .eyebrow {
     @apply text-[11px] font-semibold uppercase tracking-label text-stone;
   }
+}
 
-  /* Monochrome treatment for portraits (agents) — property photos stay in
-     natural colour; this keeps the brand's editorial black-and-white accent. */
-  .grayscale-img {
-    filter: grayscale(1) contrast(1.02);
+/* Cinematic hero: a very slow, subtle zoom/drift. Disabled under reduced
+   motion by the media query below. */
+@keyframes hero-kenburns {
+  0% {
+    transform: scale(1.03);
   }
+  100% {
+    transform: scale(1.14);
+  }
+}
+.hero-kenburns {
+  animation: hero-kenburns 30s ease-in-out infinite alternate;
+  transform-origin: 60% 45%;
+  will-change: transform;
+}
+
+/* Concierge drawer entrances. */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-up {
+  animation: slide-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-slide-right {
+  animation: slide-in-right 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A soft light sweep for the showcase band — like sun moving across glass. */
+@keyframes light-sweep {
+  0% {
+    transform: translateX(-45%);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(45%);
+    opacity: 0;
+  }
+}
+.light-sweep {
+  background: linear-gradient(
+    72deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 58%
+  );
+  animation: light-sweep 14s ease-in-out infinite;
+  animation-delay: 2s;
+  will-change: transform, opacity;
 }
 
 /* Respect reduced motion */

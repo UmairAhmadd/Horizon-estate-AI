@@ -18,7 +18,9 @@ const columns = [
 export function Footer() {
   return (
     <footer id="blog" className="border-t border-line bg-paper">
-      <div className="shell py-16">
+      {/* Extra bottom padding reserves a safe area so the floating AI widget
+          never overlaps footer content. */}
+      <div className="shell pt-16 pb-28">
         <div className="grid gap-10 lg:grid-cols-12">
           {/* Brand */}
           <div className="lg:col-span-5">

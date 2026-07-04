@@ -16,7 +16,7 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
           fill
           priority
           sizes="(max-width: 1024px) 100vw, 66vw"
-          className="grayscale-img object-cover"
+          className="object-cover"
         />
       </div>
 

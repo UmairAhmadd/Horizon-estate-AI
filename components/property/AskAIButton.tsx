@@ -12,13 +12,14 @@ export function AskAIButton({
   label = "Ask AI about this property",
   className = "",
 }: {
-  prompt: string;
+  /** Optional — omit to just open the assistant without sending a message. */
+  prompt?: string;
   label?: string;
   className?: string;
 }) {
   const ask = () => {
     window.dispatchEvent(
-      new CustomEvent("horizon:ask-ai", { detail: { prompt } })
+      new CustomEvent("horizon:ask-ai", { detail: prompt ? { prompt } : {} })
     );
   };
 

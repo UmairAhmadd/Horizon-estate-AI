@@ -62,14 +62,14 @@ export default function PropertyDetailPage({
     id: property.id,
     title: property.title,
     location: property.location,
-    price: property.price,
-    image: property.image,
-    beds: property.beds,
-    baths: property.baths,
-    area: property.area,
+    price: property.displayPrice,
+    image: property.images[0],
+    beds: property.bedrooms,
+    baths: property.bathrooms,
+    area: property.size,
   };
 
-  const askPrompt = `I'd like to know more about "${property.title}" — a ${property.type.toLowerCase()} in ${property.location}. Is it a good fit for me?`;
+  const askPrompt = `I'd like to know more about "${property.title}" — a ${property.propertyType.toLowerCase()} in ${property.location}. Is it a good fit for me?`;
 
   return (
     <main>
@@ -99,16 +99,16 @@ export default function PropertyDetailPage({
           <div className="grid gap-10 lg:grid-cols-3">
             {/* Main column */}
             <div className="space-y-10 lg:col-span-2">
-              <Gallery images={property.gallery} title={property.title} />
+              <Gallery images={property.images} title={property.title} />
 
               {/* Header */}
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-ink px-3 py-1 text-[10px] font-semibold uppercase tracking-label text-paper">
-                    {property.purpose}
+                    {property.purposeLabel}
                   </span>
                   <span className="rounded-full border border-line px-3 py-1 text-[10px] font-semibold uppercase tracking-label text-stone">
-                    {property.type}
+                    {property.propertyType}
                   </span>
                 </div>
 
@@ -119,19 +119,19 @@ export default function PropertyDetailPage({
 
                 <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-line py-4">
                   <p className="font-serif text-3xl font-semibold">
-                    {property.price}
+                    {property.displayPrice}
                   </p>
                   <span className="hidden text-line sm:inline">|</span>
                   <div className="flex items-center gap-2 text-sm text-stone">
-                    {property.beds > 0 && (
+                    {property.bedrooms > 0 && (
                       <>
-                        <span>{property.beds} Bed</span>
+                        <span>{property.bedrooms} Bed</span>
                         <Dot />
                       </>
                     )}
-                    <span>{property.baths} Bath</span>
+                    <span>{property.bathrooms} Bath</span>
                     <Dot />
-                    <span>{property.area}</span>
+                    <span>{property.size}</span>
                   </div>
                 </div>
               </div>
@@ -167,10 +167,10 @@ export default function PropertyDetailPage({
                 <div className="rounded-2xl border border-line bg-white p-5">
                   <p className="eyebrow">Interested?</p>
                   <p className="mt-2 font-serif text-2xl font-semibold">
-                    {property.price}
+                    {property.displayPrice}
                   </p>
                   <p className="mt-1 text-sm text-stone">
-                    {property.purpose} · {property.location}
+                    {property.purposeLabel} · {property.location}
                   </p>
                   <div className="mt-5 flex flex-col gap-2.5">
                     <AskAIButton prompt={askPrompt} className="w-full" />
@@ -193,7 +193,7 @@ export default function PropertyDetailPage({
                         alt={property.agent.name}
                         fill
                         sizes="64px"
-                        className="grayscale-img object-cover"
+                        className="object-cover"
                       />
                     </div>
                     <div className="min-w-0">

@@ -1,0 +1,113 @@
+// Horizon Estate AI — PostgreSQL schema (long-term memory + listings).
+// The app runs fine WITHOUT a database (localStorage/mock). When DATABASE_URL
+// is set, these tables back the listings and the concierge's memory.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Real-estate listings (seeded from lib/data.ts).
+model Property {
+  id           String   @id
+  title        String
+  city         String
+  area         String
+  purpose      String // "buy" | "rent"
+  propertyType String
+  salePrice    Int? // PKR, when purpose = "buy"
+  monthlyRent  Int? // PKR/month, when purpose = "rent"
+  displayPrice String
+  size         String
+  areaSqft     Int
+  bedrooms     Int
+  bathrooms    Int
+  images       String[]
+  features     String[]
+  description  String
+  tag          String?
+  createdAt    DateTime @default(now())
+
+  savedBy SavedProperty[]
+
+  @@index([city, purpose, propertyType])
+  @@map("properties")
+}
+
+/// One lead per anonymous session (cookie) — later, per authenticated user.
+model Lead {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  leadScore String? // internal only (Hot | Warm | Cold) — never shown to customer
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  preferences     LeadPreference?
+  conversations   Conversation[]
+  savedProperties SavedProperty[]
+
+  @@map("leads")
+}
+
+/// Latest extracted requirements for a lead (one row per lead).
+model LeadPreference {
+  id           String   @id @default(cuid())
+  leadId       String   @unique
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  location     String?
+  area         String?
+  propertyType String?
+  purpose      String?
+  saleBudget   Int?
+  rentBudget   Int?
+  bedrooms     Int?
+  size         String?
+  timeline     String?
+  updatedAt    DateTime @updatedAt
+
+  @@map("lead_preferences")
+}
+
+/// A chat thread for a lead.
+model Conversation {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  messages Message[]
+
+  @@index([leadId])
+  @@map("conversations")
+}
+
+/// Every user + assistant message.
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant"
+  content        String
+  matchedIds     String[] // property ids matched for this turn (assistant messages)
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+/// Properties a lead has saved to their shortlist.
+model SavedProperty {
+  id         String   @id @default(cuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  savedAt    DateTime @default(now())
+
+  @@unique([leadId, propertyId])
+  @@map("saved_properties")
+}

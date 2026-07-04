@@ -34,12 +34,17 @@ function SavedButton({ solid }: { solid: boolean }) {
   );
 }
 
+// Open the global "Post a property" modal (mounted in the root layout).
+function openPostProperty() {
+  window.dispatchEvent(new CustomEvent("horizon:post-property"));
+}
+
+// Only links with a real destination in the current MVP. (Mortgage / Careers /
+// Blog sections don't exist yet, so they're intentionally omitted rather than
+// left as dead anchors.) Absolute hrefs so they work from any route.
 const links = [
-  { label: "Properties", href: "#properties" },
-  { label: "Mortgage", href: "#mortgage" },
-  { label: "Company", href: "#company" },
-  { label: "Careers", href: "#careers" },
-  { label: "Blog", href: "#blog" },
+  { label: "Properties", href: "/properties" },
+  { label: "Company", href: "/#company" },
 ];
 
 export function Navbar({ overlay = true }: { overlay?: boolean }) {
@@ -113,7 +118,7 @@ export function Navbar({ overlay = true }: { overlay?: boolean }) {
         <div className="hidden items-center gap-1.5 lg:flex">
           <SavedButton solid={solid} />
           <Button
-            href="#post"
+            onClick={openPostProperty}
             variant={solid ? "primary" : "outline"}
             size="sm"
             className={
@@ -179,7 +184,10 @@ export function Navbar({ overlay = true }: { overlay?: boolean }) {
           ))}
           <li className="pt-5">
             <Button
-              href="#post"
+              onClick={() => {
+                setOpen(false);
+                openPostProperty();
+              }}
               variant="primary"
               size="lg"
               className="w-full"

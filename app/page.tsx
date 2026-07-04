@@ -1,20 +1,19 @@
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
-import { SearchFilters } from "@/components/SearchFilters";
 import { FeaturedProperties } from "@/components/FeaturedProperties";
 import { TrustStats } from "@/components/TrustStats";
-import { Agents } from "@/components/Agents";
+import { Showcase } from "@/components/Showcase";
 import { Footer } from "@/components/Footer";
 
 export default function Home() {
   return (
     <main>
-      <Navbar />
+      {/* Light nav over the soft-gradient hero */}
+      <Navbar overlay={false} />
       <Hero />
-      <SearchFilters />
       <FeaturedProperties />
       <TrustStats />
-      <Agents />
+      <Showcase />
       <Footer />
     </main>
   );

@@ -4,6 +4,7 @@ import "./globals.css";
 import { SavedProvider } from "@/context/SavedProvider";
 import { AIAssistant } from "@/components/AIAssistant";
 import { SavedDrawer } from "@/components/SavedDrawer";
+import { PostPropertyModal } from "@/components/PostPropertyModal";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -37,6 +38,7 @@ export default function RootLayout({
           {/* Global overlays — available on every route */}
           <AIAssistant />
           <SavedDrawer />
+          <PostPropertyModal />
         </SavedProvider>
       </body>
     </html>

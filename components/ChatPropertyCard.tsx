@@ -13,7 +13,9 @@ export function ChatPropertyCard({ property }: { property: MatchedProperty }) {
         <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg bg-line">
           <Image
             src={property.image}
-            alt={property.title}
+            // Decorative: the title is shown right beside it, so an empty alt
+            // avoids the title appearing twice if the image fails to load.
+            alt=""
             fill
             sizes="72px"
             className="object-cover"

@@ -1,127 +1,491 @@
 import type { Property, Agent, Stat, PropertyDetail } from "./types";
 
-// High-quality real estate placeholder imagery (rendered grayscale in UI).
+// High-quality real estate placeholder imagery (all ids verified to load).
 const img = (id: string, w = 1200) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
 
-export const HERO_IMAGE = img(
-  "photo-1600596542815-ffad4c1539a9",
-  1600
-);
+/**
+ * HERO IMAGE — the one and only place the hero background is set.
+ * Swap by replacing the id string (keep img() + width).
+ */
+export const HERO_IMAGE = img("photo-1580587771525-78b9dba3b914", 2000);
 
-export const featuredProperty: Property = {
-  id: "hp-hero",
-  title: "The Margalla Villa",
-  location: "F-7, Islamabad",
-  city: "Islamabad",
-  price: "PKR 12.5 Cr",
-  salePrice: 125_000_000,
-  beds: 5,
-  baths: 6,
-  area: "1 Kanal",
-  areaSqft: 4500,
-  type: "Villa",
-  listing: "Buy",
-  image: img("photo-1613490493576-7fde63acd811", 900),
-  tag: "Featured",
-};
+/** SHOWCASE IMAGE — the cinematic luxury band on the homepage. */
+export const SHOWCASE_IMAGE = img("photo-1613490493576-7fde63acd811", 2000);
+
+// Verified image pool (see the image-verification step). Galleries are built
+// from this so no listing ever renders a broken image.
+const POOL = [
+  "photo-1580587771525-78b9dba3b914",
+  "photo-1600585154340-be6161a56a0c",
+  "photo-1512917774080-9991f1c4c750",
+  "photo-1600607687939-ce8a6c25118c",
+  "photo-1600566753086-00f18fb6b3ea",
+  "photo-1600047509807-ba8f99d2cdde",
+  "photo-1568605114967-8130f3a36994",
+  "photo-1570129477492-45c003edd2be",
+  "photo-1576941089067-2de3c901e126",
+  "photo-1600585154526-990dced4db0d",
+  "photo-1600566752355-35792bedcfea",
+  "photo-1600210492486-724fe5c67fb0",
+  "photo-1605276374104-dee2a0ed3cd6",
+  "photo-1613977257363-707ba9348227",
+  "photo-1512918728675-ed5a9ecdebfd",
+  "photo-1493809842364-78817add7ffb",
+  "photo-1522708323590-d24dbb6b0267",
+  "photo-1560448204-e02f11c3d0e2",
+  "photo-1502005229762-cf1b2da7c5d6",
+  "photo-1449844908441-8829872d2607",
+  "photo-1523217582562-09d0def993a6",
+  "photo-1613490493576-7fde63acd811",
+];
+
+/** Build a 4-image gallery starting at a pool index (cover first). */
+const g = (start: number): string[] =>
+  [0, 1, 2, 3].map((k) => img(POOL[(start + k) % POOL.length]));
+
+const HOUSE_FEATURES = [
+  "Covered parking",
+  "24/7 gated security",
+  "Backup power supply",
+  "Modular fitted kitchen",
+  "Landscaped lawn",
+  "High-speed internet ready",
+];
+const APT_FEATURES = [
+  "Lift access",
+  "Standby generator",
+  "Covered parking",
+  "Community security",
+  "Modular kitchen",
+  "Balcony / city view",
+];
+const PLOT_FEATURES = [
+  "Corner plot",
+  "Wide road frontage",
+  "Developed sector",
+  "Utilities available",
+  "Clear title",
+  "Ready to build",
+];
 
 export const properties: Property[] = [
+  /* ------------------------------- Islamabad ----------------------------- */
   {
-    id: "p1",
-    title: "Glasshouse Residence",
-    location: "DHA Phase 6, Lahore",
-    city: "Lahore",
-    price: "PKR 9.8 Cr",
-    salePrice: 98_000_000,
-    beds: 4,
-    baths: 5,
-    area: "1 Kanal",
-    areaSqft: 4500,
-    type: "House",
-    listing: "Buy",
-    image: img("photo-1600585154340-be6161a56a0c"),
+    id: "isb-g13-5m",
+    title: "5 Marla Modern House",
+    city: "Islamabad",
+    area: "G-13",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 19_500_000,
+    displayPrice: "PKR 1.95 Cr",
+    size: "5 Marla",
+    areaSqft: 1125,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(1),
+    features: HOUSE_FEATURES,
+    description:
+      "A bright, well-kept 5 marla house in the sought-after G-13 sector — practical room sizes, a modern kitchen, and quick access to the Kashmir Highway. A strong first home within a sensible budget.",
     tag: "Verified",
   },
   {
-    id: "p2",
-    title: "Seaview Sky Apartment",
-    location: "Clifton, Karachi",
-    city: "Karachi",
-    price: "PKR 4.2 Cr",
+    id: "isb-g11-10m",
+    title: "10 Marla Family House",
+    city: "Islamabad",
+    area: "G-11",
+    purpose: "buy",
+    propertyType: "House",
     salePrice: 42_000_000,
-    beds: 3,
-    baths: 3,
-    area: "2,400 sq ft",
-    areaSqft: 2400,
-    type: "Apartment",
-    listing: "Buy",
-    image: img("photo-1512917774080-9991f1c4c750"),
+    displayPrice: "PKR 4.2 Cr",
+    size: "10 Marla",
+    areaSqft: 2250,
+    bedrooms: 4,
+    bathrooms: 4,
+    images: g(6),
+    features: HOUSE_FEATURES,
+    description:
+      "Spacious 10 marla home in established G-11, with a double-height lounge, four generous bedrooms, and a private lawn — walking distance to markets and schools.",
   },
   {
-    id: "p3",
-    title: "Courtyard Townhouse",
-    location: "Bahria Town, Islamabad",
+    id: "isb-f8-1k",
+    title: "1 Kanal Luxury House",
     city: "Islamabad",
-    price: "PKR 3.1 Cr",
-    salePrice: 31_000_000,
-    beds: 3,
-    baths: 4,
-    area: "10 Marla",
+    area: "F-8",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 115_000_000,
+    displayPrice: "PKR 11.5 Cr",
+    size: "1 Kanal",
+    areaSqft: 4500,
+    bedrooms: 5,
+    bathrooms: 6,
+    images: g(9),
+    features: HOUSE_FEATURES,
+    description:
+      "A statement 1 kanal residence in prime F-8 — floor-to-ceiling glazing, imported fittings, a landscaped garden, and a basement home theatre. Central, prestigious, move-in ready.",
+    tag: "Verified",
+  },
+  {
+    id: "isb-dha-10m",
+    title: "10 Marla House, DHA Phase 2",
+    city: "Islamabad",
+    area: "DHA",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 55_000_000,
+    displayPrice: "PKR 5.5 Cr",
+    size: "10 Marla",
     areaSqft: 2250,
-    type: "Townhouse",
-    listing: "Buy",
-    image: img("photo-1600607687939-ce8a6c25118c"),
+    bedrooms: 4,
+    bathrooms: 4,
+    images: g(12),
+    features: HOUSE_FEATURES,
+    description:
+      "Contemporary 10 marla house in secure, well-planned DHA Phase 2 — open-plan living, a fitted kitchen, and a rooftop terrace with Margalla views.",
+  },
+  {
+    id: "isb-bahria-villa",
+    title: "1 Kanal Villa, Bahria Town",
+    city: "Islamabad",
+    area: "Bahria Town",
+    purpose: "buy",
+    propertyType: "Villa",
+    salePrice: 78_000_000,
+    displayPrice: "PKR 7.8 Cr",
+    size: "1 Kanal",
+    areaSqft: 4500,
+    bedrooms: 5,
+    bathrooms: 5,
+    images: g(14),
+    features: HOUSE_FEATURES,
+    description:
+      "A resort-style villa in Bahria Town with a private pool, landscaped gardens, and a gated community offering parks, dining, and round-the-clock security.",
     tag: "New",
   },
   {
-    id: "p4",
-    title: "The Monolith Loft",
-    location: "Gulberg, Lahore",
-    city: "Lahore",
-    price: "PKR 1.8 Lakh / mo",
-    monthlyRent: 180_000,
-    priceNote: "Rent",
-    beds: 2,
-    baths: 2,
-    area: "1,600 sq ft",
-    areaSqft: 1600,
-    type: "Apartment",
-    listing: "Rent",
-    image: img("photo-1600566753086-00f18fb6b3ea"),
+    id: "isb-f8-apt-rent",
+    title: "2 Bed Apartment, F-8",
+    city: "Islamabad",
+    area: "F-8",
+    purpose: "rent",
+    propertyType: "Apartment",
+    monthlyRent: 160_000,
+    displayPrice: "PKR 1.6 Lakh/mo",
+    size: "1,250 sq ft",
+    areaSqft: 1250,
+    bedrooms: 2,
+    bathrooms: 2,
+    images: g(15),
+    features: APT_FEATURES,
+    description:
+      "A modern 2-bed rental in central F-8 — lift building, secure parking, and a bright open living area. Ideal for professionals wanting a central, low-maintenance base.",
   },
   {
-    id: "p5",
-    title: "Ivory Garden House",
-    location: "F-8, Islamabad",
+    id: "isb-g13-apt-rent",
+    title: "3 Bed Apartment, G-13",
     city: "Islamabad",
-    price: "PKR 6.5 Cr",
-    salePrice: 65_000_000,
-    beds: 4,
-    baths: 4,
-    area: "14 Marla",
-    areaSqft: 3150,
-    type: "House",
-    listing: "Buy",
-    image: img("photo-1600047509807-ba8f99d2cdde"),
+    area: "G-13",
+    purpose: "rent",
+    propertyType: "Apartment",
+    monthlyRent: 120_000,
+    displayPrice: "PKR 1.2 Lakh/mo",
+    size: "1,500 sq ft",
+    areaSqft: 1500,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(16),
+    features: APT_FEATURES,
+    description:
+      "A family-sized 3-bed apartment in G-13 with generator backup, covered parking, and easy access to the metro — comfortable and well within a modest rent budget.",
+  },
+  {
+    id: "isb-dha-penthouse",
+    title: "Penthouse, DHA Phase 1",
+    city: "Islamabad",
+    area: "DHA",
+    purpose: "buy",
+    propertyType: "Penthouse",
+    salePrice: 95_000_000,
+    displayPrice: "PKR 9.5 Cr",
+    size: "3,000 sq ft",
+    areaSqft: 3000,
+    bedrooms: 3,
+    bathrooms: 4,
+    images: g(2),
+    features: APT_FEATURES,
+    description:
+      "A top-floor penthouse in DHA with a wrap-around terrace, panoramic views, and premium finishes throughout — a rare turnkey luxury apartment.",
+  },
+
+  /* --------------------------------- Lahore ------------------------------ */
+  {
+    id: "lhr-dha-1k",
+    title: "1 Kanal House, DHA Phase 5",
+    city: "Lahore",
+    area: "DHA",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 90_000_000,
+    displayPrice: "PKR 9 Cr",
+    size: "1 Kanal",
+    areaSqft: 4500,
+    bedrooms: 5,
+    bathrooms: 6,
+    images: g(3),
+    features: HOUSE_FEATURES,
+    description:
+      "An elegant 1 kanal house in DHA Phase 5 — double unit, five bedrooms, a home office, and a landscaped garden on a quiet, tree-lined street.",
     tag: "Verified",
   },
   {
-    id: "p6",
-    title: "Skyline Commercial Floor",
-    location: "I-9, Islamabad",
-    city: "Islamabad",
-    price: "PKR 22 Cr",
-    salePrice: 220_000_000,
-    beds: 0,
-    baths: 4,
-    area: "8,000 sq ft",
-    areaSqft: 8000,
-    type: "Office",
-    listing: "Commercial",
-    image: img("photo-1497366754035-f200968a6e72"),
+    id: "lhr-gulberg-apt-buy",
+    title: "2 Bed Apartment, Gulberg",
+    city: "Lahore",
+    area: "Gulberg",
+    purpose: "buy",
+    propertyType: "Apartment",
+    salePrice: 32_000_000,
+    displayPrice: "PKR 3.2 Cr",
+    size: "1,600 sq ft",
+    areaSqft: 1600,
+    bedrooms: 2,
+    bathrooms: 2,
+    images: g(17),
+    features: APT_FEATURES,
+    description:
+      "A high-yield 2-bed apartment in the heart of Gulberg — strong rental demand, managed building, and prime commercial surroundings. A solid investment buy.",
+    tag: "Investment",
+  },
+  {
+    id: "lhr-bahria-10m",
+    title: "10 Marla House, Bahria Town",
+    city: "Lahore",
+    area: "Bahria Town",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 38_000_000,
+    displayPrice: "PKR 3.8 Cr",
+    size: "10 Marla",
+    areaSqft: 2250,
+    bedrooms: 4,
+    bathrooms: 3,
+    images: g(4),
+    features: HOUSE_FEATURES,
+    description:
+      "A tidy 10 marla house in gated Bahria Town Lahore — family-friendly, with parks and amenities nearby and reliable security throughout the community.",
+  },
+  {
+    id: "lhr-johar-5m",
+    title: "5 Marla House, Johar Town",
+    city: "Lahore",
+    area: "Johar Town",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 22_000_000,
+    displayPrice: "PKR 2.2 Cr",
+    size: "5 Marla",
+    areaSqft: 1125,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(5),
+    features: HOUSE_FEATURES,
+    description:
+      "An affordable 5 marla house in central Johar Town — close to Emporium Mall and Expo Centre, with good schools and hospitals within easy reach.",
+  },
+  {
+    id: "lhr-gulberg-apt-rent",
+    title: "2 Bed Apartment, Gulberg",
+    city: "Lahore",
+    area: "Gulberg",
+    purpose: "rent",
+    propertyType: "Apartment",
+    monthlyRent: 180_000,
+    displayPrice: "PKR 1.8 Lakh/mo",
+    size: "1,600 sq ft",
+    areaSqft: 1600,
+    bedrooms: 2,
+    bathrooms: 2,
+    images: g(18),
+    features: APT_FEATURES,
+    description:
+      "A serviced 2-bed rental in Gulberg with a gym, lift, and secure parking — a polished, central address for professionals.",
+  },
+  {
+    id: "lhr-dha-plot",
+    title: "1 Kanal Plot, DHA Phase 6",
+    city: "Lahore",
+    area: "DHA",
+    purpose: "buy",
+    propertyType: "Plot",
+    salePrice: 65_000_000,
+    displayPrice: "PKR 6.5 Cr",
+    size: "1 Kanal",
+    areaSqft: 4500,
+    bedrooms: 0,
+    bathrooms: 0,
+    images: g(19),
+    features: PLOT_FEATURES,
+    description:
+      "A prime 1 kanal residential plot in DHA Phase 6 — developed sector, wide road, and strong capital appreciation. Ready for your custom build.",
+    tag: "Investment",
+  },
+
+  /* ------------------------------- Rawalpindi ---------------------------- */
+  {
+    id: "rwp-bahria-10m",
+    title: "10 Marla Family House, Bahria Town",
+    city: "Rawalpindi",
+    area: "Bahria Town",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 41_000_000,
+    displayPrice: "PKR 4.1 Cr",
+    size: "10 Marla",
+    areaSqft: 2250,
+    bedrooms: 4,
+    bathrooms: 4,
+    images: g(7),
+    features: HOUSE_FEATURES,
+    description:
+      "A comfortable 10 marla family house in Bahria Town Rawalpindi — four bedrooms, a large lounge, and a safe, amenity-rich gated community perfect for families.",
+    tag: "Verified",
+  },
+  {
+    id: "rwp-dha-5m",
+    title: "5 Marla House, DHA",
+    city: "Rawalpindi",
+    area: "DHA",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 24_000_000,
+    displayPrice: "PKR 2.4 Cr",
+    size: "5 Marla",
+    areaSqft: 1125,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(8),
+    features: HOUSE_FEATURES,
+    description:
+      "A neat 5 marla house in DHA Rawalpindi — modern elevation, three bedrooms, and quick access to the GT Road and Islamabad.",
+  },
+  {
+    id: "rwp-satellite-7m",
+    title: "7 Marla House, Satellite Town",
+    city: "Rawalpindi",
+    area: "Satellite Town",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 28_000_000,
+    displayPrice: "PKR 2.8 Cr",
+    size: "7 Marla",
+    areaSqft: 1575,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(10),
+    features: HOUSE_FEATURES,
+    description:
+      "A well-located 7 marla house in established Satellite Town — central, walkable, and close to markets, mosques, and schools.",
+  },
+  {
+    id: "rwp-bahria-apt-rent",
+    title: "2 Bed Apartment, Bahria Town",
+    city: "Rawalpindi",
+    area: "Bahria Town",
+    purpose: "rent",
+    propertyType: "Apartment",
+    monthlyRent: 95_000,
+    displayPrice: "PKR 95k/mo",
+    size: "1,100 sq ft",
+    areaSqft: 1100,
+    bedrooms: 2,
+    bathrooms: 2,
+    images: g(11),
+    features: APT_FEATURES,
+    description:
+      "An affordable 2-bed rental in Bahria Town Rawalpindi — secure community, backup power, and covered parking at a budget-friendly monthly rent.",
+  },
+
+  /* --------------------------------- Karachi ----------------------------- */
+  {
+    id: "khi-dha-house",
+    title: "500 sq yd House, DHA Phase 8",
+    city: "Karachi",
+    area: "DHA",
+    purpose: "buy",
+    propertyType: "House",
+    salePrice: 120_000_000,
+    displayPrice: "PKR 12 Cr",
+    size: "4,500 sq ft",
+    areaSqft: 4500,
+    bedrooms: 5,
+    bathrooms: 6,
+    images: g(13),
+    features: HOUSE_FEATURES,
+    description:
+      "A grand 500 sq yd house in DHA Phase 8 — sea breeze, six baths, a double garage, and premium finishes in Karachi's most prestigious address.",
+    tag: "Verified",
+  },
+  {
+    id: "khi-clifton-apt-buy",
+    title: "3 Bed Sea-View Apartment, Clifton",
+    city: "Karachi",
+    area: "Clifton",
+    purpose: "buy",
+    propertyType: "Apartment",
+    salePrice: 45_000_000,
+    displayPrice: "PKR 4.5 Cr",
+    size: "2,200 sq ft",
+    areaSqft: 2200,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(20),
+    features: APT_FEATURES,
+    description:
+      "A bright 3-bed apartment in Clifton with uninterrupted sea views, a managed building, and covered parking — a premium coastal home for sale.",
+    tag: "Sea view",
+  },
+  {
+    id: "khi-gulshan-apt-buy",
+    title: "2 Bed Apartment, Gulshan",
+    city: "Karachi",
+    area: "Gulshan",
+    purpose: "buy",
+    propertyType: "Apartment",
+    salePrice: 18_000_000,
+    displayPrice: "PKR 1.8 Cr",
+    size: "1,200 sq ft",
+    areaSqft: 1200,
+    bedrooms: 2,
+    bathrooms: 2,
+    images: g(21),
+    features: APT_FEATURES,
+    description:
+      "A value-priced 2-bed apartment in Gulshan-e-Iqbal — practical layout, community security, and excellent connectivity across Karachi.",
+  },
+  {
+    id: "khi-clifton-apt-rent",
+    title: "3 Bed Apartment, Clifton",
+    city: "Karachi",
+    area: "Clifton",
+    purpose: "rent",
+    propertyType: "Apartment",
+    monthlyRent: 250_000,
+    displayPrice: "PKR 2.5 Lakh/mo",
+    size: "2,000 sq ft",
+    areaSqft: 2000,
+    bedrooms: 3,
+    bathrooms: 3,
+    images: g(0),
+    features: APT_FEATURES,
+    description:
+      "A spacious 3-bed rental in Clifton with sea-facing balconies, a gym, and 24/7 security — an upscale furnished-ready home.",
   },
 ];
+
+/** Kept for reuse (e.g. a featured slot) — the first listing. */
+export const featuredProperty: Property = properties[0];
 
 export const agents: Agent[] = [
   {
@@ -151,82 +515,30 @@ export const agents: Agent[] = [
 ];
 
 export const stats: Stat[] = [
-  { value: "1,200+", label: "Properties listed" },
-  { value: "450+", label: "Verified buyers" },
-  { value: "98%", label: "Client satisfaction" },
-  { value: "24 hrs", label: "Avg. match time" },
+  { value: `${properties.length}`, label: "Demo listings" },
+  { value: "4", label: "Cities covered" },
+  { value: "Buy & Rent", label: "Handled separately" },
+  { value: "24/7", label: "AI concierge" },
 ];
 
 export const suggestedPrompts: string[] = [
-  "I need a 5 marla house in Islamabad",
-  "Find an apartment under 80 lakh",
-  "Suggest investment properties",
-];
-
-export const listingTabs: { label: string; value: string }[] = [
-  { label: "Buy", value: "Buy" },
-  { label: "Rent", value: "Rent" },
-  { label: "New Developments", value: "New Developments" },
-  { label: "Commercial", value: "Commercial" },
+  "5 marla house in Islamabad under 2 crore",
+  "Apartment rental under 2 lakh/month",
+  "Karachi apartment for sale",
 ];
 
 /* -------------------------------------------------------------------------- */
 /*  Property detail lookup                                                     */
 /*                                                                            */
 /*  SWAP POINT — replace getPropertyById with a DB/API fetch later. The       */
-/*  detail page only depends on this function returning a PropertyDetail.     */
+/*  detail page only depends on this returning a PropertyDetail.              */
 /* -------------------------------------------------------------------------- */
 
-const allProperties: Property[] = [featuredProperty, ...properties];
+const allProperties: Property[] = properties;
 
 /** Used by generateStaticParams to pre-render every detail page. */
 export function getAllPropertyIds(): string[] {
   return allProperties.map((p) => p.id);
-}
-
-function buildGallery(p: Property): string[] {
-  // Placeholder gallery: the hero shot plus a few other listings' imagery.
-  const others = allProperties.filter((x) => x.id !== p.id).map((x) => x.image);
-  return [p.image, ...others.slice(0, 3)];
-}
-
-function purposeLabel(listing: Property["listing"]): string {
-  switch (listing) {
-    case "Rent":
-      return "For Rent";
-    case "Commercial":
-      return "Commercial";
-    case "New Developments":
-      return "New Development";
-    default:
-      return "For Sale";
-  }
-}
-
-function buildDescription(p: Property): string {
-  const bedText = p.beds > 0 ? `${p.beds}-bedroom ` : "";
-  return `This ${bedText}${p.type.toLowerCase()} in ${p.location} pairs calm, light-filled interiors with considered detailing throughout. Set across ${p.area}, it offers generous, well-proportioned spaces, quality finishes, and a layout that works as well for quiet everyday living as it does for entertaining. Every Horizon listing is verified and ready to view at a time that suits you.`;
-}
-
-function buildFeatures(p: Property): string[] {
-  if (p.listing === "Commercial") {
-    return [
-      "Prime road frontage",
-      "Dedicated parking",
-      "24/7 security",
-      "Backup power",
-      "High-speed fibre",
-      "Central heating & cooling",
-    ];
-  }
-  return [
-    "Covered parking",
-    "24/7 gated security",
-    "Backup power supply",
-    "Modular fitted kitchen",
-    "Landscaped outdoor space",
-    "High-speed internet ready",
-  ];
 }
 
 function agentForCity(city: string): Agent {
@@ -238,10 +550,8 @@ export function getPropertyById(id: string): PropertyDetail | undefined {
   if (!p) return undefined;
   return {
     ...p,
-    gallery: buildGallery(p),
-    description: buildDescription(p),
-    features: buildFeatures(p),
-    purpose: purposeLabel(p.listing),
+    location: `${p.area}, ${p.city}`,
+    purposeLabel: p.purpose === "rent" ? "For Rent" : "For Sale",
     agent: agentForCity(p.city),
   };
 }
@@ -250,14 +560,14 @@ export function getPropertyById(id: string): PropertyDetail | undefined {
 /*  Listing search + filtering                                                 */
 /*                                                                            */
 /*  SWAP POINT — filterProperties is the single data-access seam for the       */
-/*  listing page. Replace its body with a DB/API query later; the page and     */
-/*  filter UI keep working as long as it returns Property[].                   */
+/*  listing page and the AI matcher. Replace its body with a DB/API query      */
+/*  later; callers keep working as long as it returns Property[].             */
 /* -------------------------------------------------------------------------- */
 
 /** Shared option lists so the homepage and listing filters stay in sync. */
 export const filterOptions = {
-  locations: ["Islamabad", "Lahore", "Karachi", "Rawalpindi"],
-  types: ["House", "Apartment", "Villa", "Townhouse", "Office", "Plot"],
+  locations: ["Islamabad", "Lahore", "Rawalpindi", "Karachi"],
+  types: ["House", "Apartment", "Villa", "Penthouse", "Plot"],
   purposes: [
     { label: "Buy", value: "buy" },
     { label: "Rent", value: "rent" },
@@ -265,14 +575,15 @@ export const filterOptions = {
   salePrices: [
     { label: "Under 50 Lakh", value: "5000000" },
     { label: "Under 1 Cr", value: "10000000" },
+    { label: "Under 2 Cr", value: "20000000" },
     { label: "Under 5 Cr", value: "50000000" },
-    { label: "Under 25 Cr", value: "250000000" },
+    { label: "Under 12 Cr", value: "120000000" },
   ],
   rentPrices: [
-    { label: "Under 50k / mo", value: "50000" },
     { label: "Under 1 Lakh / mo", value: "100000" },
+    { label: "Under 1.5 Lakh / mo", value: "150000" },
     { label: "Under 2 Lakh / mo", value: "200000" },
-    { label: "Under 5 Lakh / mo", value: "500000" },
+    { label: "Under 3 Lakh / mo", value: "300000" },
   ],
   beds: [
     { label: "1+", value: "1" },
@@ -327,39 +638,42 @@ export function parseFilters(params: RawParams): PropertyFilters {
   };
 }
 
-const isRental = (p: Property) => p.listing === "Rent";
-
 export function filterProperties(filters: PropertyFilters): Property[] {
   return allProperties.filter((p) => {
+    if (filters.location) {
+      // Match a city ("islamabad") OR an area/sector ("g-13", "dha", "gulberg"),
+      // so an area-only location from the AI still resolves to real listings.
+      const loc = filters.location.toLowerCase();
+      if (p.city.toLowerCase() !== loc && p.area.toLowerCase() !== loc) {
+        return false;
+      }
+    }
     if (
-      filters.location &&
-      p.city.toLowerCase() !== filters.location.toLowerCase()
+      filters.type &&
+      p.propertyType.toLowerCase() !== filters.type.toLowerCase()
     ) {
       return false;
     }
-    if (filters.type && p.type.toLowerCase() !== filters.type.toLowerCase()) {
-      return false;
-    }
 
-    if (filters.purpose === "rent" && !isRental(p)) return false;
-    if (filters.purpose === "buy" && isRental(p)) return false;
+    if (filters.purpose === "rent" && p.purpose !== "rent") return false;
+    if (filters.purpose === "buy" && p.purpose !== "buy") return false;
 
-    // A sale budget only ever compares against sale listings (and vice versa),
-    // so rent and sale prices are never mixed.
+    // A sale budget only compares against sale listings (and rent vs rent), so
+    // rent and sale prices are never mixed.
     if (filters.maxSalePrice !== undefined) {
-      if (isRental(p)) return false;
+      if (p.purpose !== "buy") return false;
       if (p.salePrice === undefined || p.salePrice > filters.maxSalePrice) {
         return false;
       }
     }
     if (filters.maxRent !== undefined) {
-      if (!isRental(p)) return false;
+      if (p.purpose !== "rent") return false;
       if (p.monthlyRent === undefined || p.monthlyRent > filters.maxRent) {
         return false;
       }
     }
 
-    if (filters.minBeds !== undefined && p.beds < filters.minBeds) {
+    if (filters.minBeds !== undefined && p.bedrooms < filters.minBeds) {
       return false;
     }
     if (filters.minAreaSqft !== undefined && p.areaSqft < filters.minAreaSqft) {

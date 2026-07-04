@@ -7,29 +7,27 @@ const Dot = () => <span className="text-stone/40">·</span>;
 
 export function PropertyCard({ property }: { property: Property }) {
   const href = `/properties/${property.id}`;
+  const location = `${property.area}, ${property.city}`;
+  const label =
+    property.tag ?? (property.purpose === "rent" ? "For Rent" : property.propertyType);
 
   return (
-    <article className="group flex flex-col">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-line">
+    <article className="group flex flex-col transition-transform duration-300 ease-out hover:-translate-y-1">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-line">
         <Link href={href} aria-label={`View ${property.title}`}>
           <Image
-            src={property.image}
+            src={property.images[0]}
             alt={property.title}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />
         </Link>
-        <div className="pointer-events-none absolute left-3 top-3 flex gap-2">
-          <span className="rounded-full bg-paper/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-label text-ink backdrop-blur">
-            {property.listing === "Rent" ? "For Rent" : property.type}
-          </span>
-          {property.tag && (
-            <span className="rounded-full bg-ink/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-label text-paper backdrop-blur">
-              {property.tag}
-            </span>
-          )}
-        </div>
+
+        {/* One minimal label — a status tag if present, otherwise the type */}
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-paper/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-label text-ink backdrop-blur">
+          {label}
+        </span>
 
         <SaveButton
           variant="icon"
@@ -37,12 +35,12 @@ export function PropertyCard({ property }: { property: Property }) {
           property={{
             id: property.id,
             title: property.title,
-            location: property.location,
-            price: property.price,
-            image: property.image,
-            beds: property.beds,
-            baths: property.baths,
-            area: property.area,
+            location,
+            price: property.displayPrice,
+            image: property.images[0],
+            beds: property.bedrooms,
+            baths: property.bathrooms,
+            area: property.size,
           }}
         />
       </div>
@@ -55,21 +53,21 @@ export function PropertyCard({ property }: { property: Property }) {
             </Link>
           </h3>
           <p className="whitespace-nowrap font-serif text-lg font-semibold">
-            {property.price}
+            {property.displayPrice}
           </p>
         </div>
-        <p className="mt-1 text-sm text-stone">{property.location}</p>
+        <p className="mt-1 text-sm text-stone">{location}</p>
 
         <div className="mt-4 flex items-center gap-2 border-t border-line pt-3 text-[13px] text-stone">
-          {property.beds > 0 && (
+          {property.bedrooms > 0 && (
             <>
-              <span>{property.beds} Bed</span>
+              <span>{property.bedrooms} Bed</span>
               <Dot />
             </>
           )}
-          <span>{property.baths} Bath</span>
+          <span>{property.bathrooms} Bath</span>
           <Dot />
-          <span>{property.area}</span>
+          <span>{property.size}</span>
         </div>
 
         <Link

@@ -23,13 +23,13 @@ export function Agents() {
               key={a.id}
               className="flex flex-col rounded-2xl border border-line bg-white p-4"
             >
-              <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-line">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-line">
                 <Image
                   src={a.image}
                   alt={a.name}
                   fill
                   sizes="(max-width: 640px) 100vw, 33vw"
-                  className="grayscale-img object-cover"
+                  className="object-cover object-top"
                 />
               </div>
               <div className="flex flex-1 flex-col px-1 pt-5">
