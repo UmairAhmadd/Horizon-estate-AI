@@ -118,15 +118,24 @@ behaves exactly as the default above.
 
 | Layer | What | Where |
 | --- | --- | --- |
-| **Short-term memory** | The current chat's messages (this session) | React state in the concierge drawer |
-| **Local long-term memory** | "Recent searches" — title, purpose/budget summary, extracted requirements, matched ids, and a message snapshot per search | `localStorage` via [`lib/searchHistory.ts`](lib/searchHistory.ts) (swappable repository) |
-| **Production memory (future)** | Durable conversations / messages / leads / preferences across devices | PostgreSQL (`conversations`, `messages`, `leads`, `lead_preferences`) via Prisma — already wired, enabled by `DATABASE_URL` |
+| **Short-term memory** | The current message context — the messages in the active chat, sent with each turn so the concierge never re-asks a known field | React state in the concierge drawer |
+| **Long-term memory (PostgreSQL)** | Durable **conversations**, **messages** (with matched property ids), and per-conversation **lead_preferences** — a ChatGPT-style history that survives reloads | PostgreSQL via Prisma ([`lib/server/leadStore.ts`](lib/server/leadStore.ts)), enabled by `DATABASE_URL` |
+| **Local fallback** | "Recent searches" — title, summary, requirements, and a message snapshot per search | `localStorage` via [`lib/searchHistory.ts`](lib/searchHistory.ts), used automatically when no `DATABASE_URL` |
 
-The "Recent searches" panel lives inside the concierge drawer (toggled from the
-header, so it never clutters the chat). Clicking an entry reloads that search's
-conversation; "Clear history" wipes the local list. Swapping
-`localSearchHistory` for a DB-backed repository upgrades it to cross-device
-history without touching the UI.
+**Chat history sidebar.** The concierge drawer has a **Chats** toggle in the
+header that opens a sidebar of past conversations. **New** starts a fresh
+conversation; clicking a past chat reloads all its messages and lead context.
+
+- **With `DATABASE_URL`:** the sidebar is backed by PostgreSQL. Every user and
+  assistant message is saved to `messages`, extracted lead fields to
+  `lead_preferences` (one row per conversation), and matched property ids to
+  `messages.matchedIds`. "New" creates a new `conversations` row; the assistant
+  API (`/api/assistant`) threads a `conversationId` so a thread keeps growing.
+- **Without `DATABASE_URL`:** the sidebar falls back to `localStorage` recent
+  searches — identical UX, no server required (great for offline/dev).
+
+The client detects which mode is active from `GET /api/conversations`
+(`{ enabled }`), so the same UI works both ways with no configuration.
 
 ## PostgreSQL long-term memory (optional)
 
@@ -136,25 +145,31 @@ Prisma models ([`prisma/schema.prisma`](prisma/schema.prisma)):
 | --- | --- |
 | `properties` | Listings (seeded from `lib/data.ts`) |
 | `leads` | One per anonymous session (cookie); later per user |
-| `lead_preferences` | Latest extracted requirements for a lead |
-| `conversations` | A chat thread per lead |
-| `messages` | Every user + assistant message (+ matched ids) |
+| `conversations` | Chat threads per lead (many — ChatGPT-style), with title + `updatedAt` |
+| `messages` | Every user + assistant message (+ matched property ids) |
+| `lead_preferences` | Extracted requirements, **one row per conversation** |
 | `saved_properties` | A lead's saved shortlist (join to `properties`) |
+| `posted_property_drafts` | "Post a property" submissions (status `pending` until approved) |
 
 **What gets persisted (only when `DATABASE_URL` is set):**
 
-- Every chat message → `messages`
-- Extracted requirements → `leads` + `lead_preferences`
+- Every user + assistant chat message → `messages` (with matched ids)
+- Extracted requirements per conversation → `lead_preferences`
+- New conversations → `conversations`; the assistant API threads a
+  `conversationId` so each turn appends to the right thread
 - Saved properties → `saved_properties` (use `NEXT_PUBLIC_SAVED_PROVIDER=api`)
-- On a returning session, stored `lead_preferences` are loaded and merged back
-  into the concierge so it remembers earlier requirements.
+- Posted-property submissions → `posted_property_drafts` (via `/api/submissions`)
+- Reopening a conversation reloads its messages + lead context; the active
+  thread keeps growing.
 
 **Setup:**
 
 ```bash
 # 1. Set DATABASE_URL in .env.local (see .env.example)
-# 2. Create tables + generate the client
-npm run db:migrate        # prisma migrate dev  (or: npm run db:push)
+# 2. Create tables + generate the client — an initial migration is committed
+#    (prisma/migrations/0_init), so either works on a fresh database:
+npm run db:migrate        # prisma migrate dev   (dev, tracks history)
+npx prisma migrate deploy # apply committed migrations (prod/CI)
 # 3. Seed the demo listings
 npm run db:seed
 # optional: inspect data

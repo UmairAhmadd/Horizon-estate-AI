@@ -1,12 +1,22 @@
 import "server-only";
-import type { Property as PrismaProperty } from "@prisma/client";
+import type {
+  Property as PrismaProperty,
+  LeadPreference as PrismaLeadPreference,
+} from "@prisma/client";
 import { getPrisma } from "../db";
-import type { AssistantResponse, LeadFields, SavedProperty } from "../types";
+import type {
+  AssistantResponse,
+  ChatMessage,
+  ConversationDetail,
+  ConversationSummary,
+  LeadFields,
+  SavedProperty,
+} from "../types";
 
 /**
- * DB-backed long-term memory (leads, conversations, messages, preferences,
- * saved properties). Every function is a no-op / safe default when there is no
- * DATABASE_URL, so the app behaves identically without a database.
+ * DB-backed long-term memory (leads, conversations, messages, per-conversation
+ * preferences, saved properties). Every function is a no-op / safe default when
+ * there is no DATABASE_URL, so the app behaves identically without a database.
  */
 
 /* ------------------------------- helpers ---------------------------------- */
@@ -29,12 +39,34 @@ function isRentIntent(purpose?: string): boolean {
   return /rent/i.test(purpose ?? "");
 }
 
+/**
+ * "G-13, Islamabad" → { area: "G-13", city: "Islamabad" };
+ * "Islamabad" → { city: "Islamabad" }. Reconstructed losslessly by locationOf().
+ */
+function splitLocation(location?: string): {
+  city: string | null;
+  area: string | null;
+} {
+  if (!location) return { city: null, area: null };
+  const parts = location.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return { area: parts.slice(0, -1).join(", "), city: parts[parts.length - 1] };
+  }
+  return { city: parts[0] ?? null, area: null };
+}
+
+function locationOf(area: string | null, city: string | null): string | undefined {
+  return [area, city].filter(Boolean).join(", ") || undefined;
+}
+
 /** LeadFields -> lead_preferences columns. */
 function toPreferenceData(lead: LeadFields) {
   const pkr = budgetToPkr(lead.budget);
   const rent = isRentIntent(lead.purpose);
+  const { city, area } = splitLocation(lead.location);
   return {
-    location: lead.location ?? null,
+    city,
+    area,
     propertyType: lead.propertyType ?? null,
     purpose: lead.purpose ?? null,
     saleBudget: pkr !== undefined && !rent ? pkr : null,
@@ -43,6 +75,41 @@ function toPreferenceData(lead: LeadFields) {
     size: lead.size ?? null,
     timeline: lead.timeline ?? null,
   };
+}
+
+/** Emit a budget string the lead engine can parse back (e.g. "Under PKR 2 Crore"). */
+function pkrToBudgetLabel(n: number, rent: boolean): string {
+  const trim = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  let label: string;
+  if (n >= 10_000_000) label = `Under PKR ${trim(n / 10_000_000)} Crore`;
+  else if (n >= 100_000) label = `Under PKR ${trim(n / 100_000)} Lakh`;
+  else label = `Under PKR ${n}`;
+  return rent ? `${label} / mo` : label;
+}
+
+/** lead_preferences row -> LeadFields. */
+function prefToLead(p: PrismaLeadPreference | null | undefined): LeadFields {
+  if (!p) return {};
+  return {
+    location: locationOf(p.area, p.city),
+    propertyType: p.propertyType ?? undefined,
+    purpose: p.purpose ?? undefined,
+    bedrooms: p.bedrooms ?? undefined,
+    size: p.size ?? undefined,
+    timeline: p.timeline ?? undefined,
+    budget:
+      p.saleBudget != null
+        ? pkrToBudgetLabel(p.saleBudget, false)
+        : p.rentBudget != null
+          ? pkrToBudgetLabel(p.rentBudget, true)
+          : undefined,
+  };
+}
+
+/** First user message → a short conversation title. */
+function deriveTitle(message: string): string {
+  const t = message.trim().replace(/\s+/g, " ");
+  return t.length > 48 ? `${t.slice(0, 47)}…` : t || "New chat";
 }
 
 function toSavedDto(p: PrismaProperty, savedAt: Date): SavedProperty {
@@ -73,75 +140,71 @@ async function ensureLeadId(
   return lead.id;
 }
 
-/* ---------------------------- lead preferences ---------------------------- */
+/* --------------------------- conversation lead ---------------------------- */
 
-/** Load stored requirements for a returning session (null if none / no DB). */
-export async function loadLeadPreferences(
-  sessionId: string
+/** Stored requirements for a specific conversation (null if none / no DB). */
+export async function loadConversationLead(
+  sessionId: string,
+  conversationId?: string | null
 ): Promise<LeadFields | null> {
   const prisma = getPrisma();
-  if (!prisma || !sessionId) return null;
+  if (!prisma || !sessionId || !conversationId) return null;
   try {
-    const lead = await prisma.lead.findUnique({
-      where: { sessionId },
-      include: { preferences: true },
+    const pref = await prisma.leadPreference.findFirst({
+      where: { conversationId, conversation: { lead: { sessionId } } },
     });
-    const p = lead?.preferences;
-    if (!p) return null;
-    return {
-      location: p.location ?? undefined,
-      propertyType: p.propertyType ?? undefined,
-      purpose: p.purpose ?? undefined,
-      bedrooms: p.bedrooms ?? undefined,
-      size: p.size ?? undefined,
-      timeline: p.timeline ?? undefined,
-      budget:
-        p.saleBudget != null
-          ? `PKR ${p.saleBudget}`
-          : p.rentBudget != null
-            ? `PKR ${p.rentBudget} / mo`
-            : undefined,
-    };
+    return pref ? prefToLead(pref) : null;
   } catch (err) {
-    console.error("[leadStore] loadLeadPreferences failed:", err);
+    console.error("[leadStore] loadConversationLead failed:", err);
     return null;
   }
 }
 
-/** Persist one conversation turn: lead + preferences + both messages. */
+/**
+ * Persist one conversation turn: lead + per-conversation preferences + both
+ * messages (+ matched property ids). Creates the conversation if needed and
+ * returns its id so the client can keep writing to the same thread.
+ */
 export async function recordTurn(args: {
   sessionId: string;
+  conversationId?: string | null;
   userMessage: string;
   response: AssistantResponse;
-}): Promise<void> {
+}): Promise<string | null> {
   const prisma = getPrisma();
-  if (!prisma) return;
+  if (!prisma) return args.conversationId ?? null;
   try {
     const leadId = await ensureLeadId(args.sessionId, args.response.leadScore);
-    if (!leadId) return;
+    if (!leadId) return null;
+
+    // Resolve the conversation: verify the provided id belongs to this lead,
+    // otherwise start a fresh thread.
+    let conversationId = args.conversationId ?? null;
+    let needsTitle = false;
+    if (conversationId) {
+      const conv = await prisma.conversation.findFirst({
+        where: { id: conversationId, leadId },
+        select: { id: true, title: true },
+      });
+      if (!conv) conversationId = null;
+      else needsTitle = !conv.title;
+    }
+    if (!conversationId) {
+      const conv = await prisma.conversation.create({
+        data: { leadId, title: deriveTitle(args.userMessage) },
+      });
+      conversationId = conv.id;
+    }
 
     await prisma.leadPreference.upsert({
-      where: { leadId },
-      create: { leadId, ...toPreferenceData(args.response.lead) },
+      where: { conversationId },
+      create: { conversationId, ...toPreferenceData(args.response.lead) },
       update: toPreferenceData(args.response.lead),
     });
 
-    // One rolling conversation per lead for this demo.
-    const existing = await prisma.conversation.findFirst({
-      where: { leadId },
-      orderBy: { createdAt: "desc" },
-    });
-    const conversationId =
-      existing?.id ?? (await prisma.conversation.create({ data: { leadId } })).id;
-
     await prisma.message.createMany({
       data: [
-        {
-          conversationId,
-          role: "user",
-          content: args.userMessage,
-          matchedIds: [],
-        },
+        { conversationId, role: "user", content: args.userMessage, matchedIds: [] },
         {
           conversationId,
           role: "assistant",
@@ -150,8 +213,134 @@ export async function recordTurn(args: {
         },
       ],
     });
+
+    // Bump updatedAt (and backfill the title if the conversation was created empty).
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: needsTitle ? { title: deriveTitle(args.userMessage) } : {},
+    });
+
+    return conversationId;
   } catch (err) {
     console.error("[leadStore] recordTurn failed:", err);
+    return args.conversationId ?? null;
+  }
+}
+
+/* ---------------------------- conversation CRUD --------------------------- */
+
+/** All conversations for a session, newest first (empty when no DB). */
+export async function listConversations(
+  sessionId: string
+): Promise<ConversationSummary[]> {
+  const prisma = getPrisma();
+  if (!prisma || !sessionId) return [];
+  try {
+    const convs = await prisma.conversation.findMany({
+      where: { lead: { sessionId } },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+      include: {
+        preference: true,
+        messages: {
+          where: { role: "user" },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+        },
+      },
+    });
+    return convs.map((c) => ({
+      id: c.id,
+      title: c.title || c.messages[0]?.content.slice(0, 48) || "New chat",
+      summary: summarisePref(c.preference),
+      updatedAt: c.updatedAt.getTime(),
+    }));
+  } catch (err) {
+    console.error("[leadStore] listConversations failed:", err);
+    return [];
+  }
+}
+
+function summarisePref(p: PrismaLeadPreference | null | undefined): string {
+  if (!p) return "";
+  const purpose = p.purpose
+    ? /rent/i.test(p.purpose)
+      ? "Rent"
+      : /invest/i.test(p.purpose)
+        ? "Invest"
+        : "Buy"
+    : null;
+  return [purpose, locationOf(p.area, p.city), p.propertyType]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Full conversation (messages + lead context) for reload; null if not owned. */
+export async function getConversation(
+  sessionId: string,
+  conversationId: string
+): Promise<ConversationDetail | null> {
+  const prisma = getPrisma();
+  if (!prisma || !sessionId) return null;
+  try {
+    const conv = await prisma.conversation.findFirst({
+      where: { id: conversationId, lead: { sessionId } },
+      include: {
+        preference: true,
+        messages: { orderBy: { createdAt: "asc" } },
+      },
+    });
+    if (!conv) return null;
+    const messages: ChatMessage[] = conv.messages.map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content,
+    }));
+    return { id: conv.id, messages, lead: prefToLead(conv.preference) };
+  } catch (err) {
+    console.error("[leadStore] getConversation failed:", err);
+    return null;
+  }
+}
+
+/** Create an empty conversation and return its id (null when no DB). */
+export async function createConversation(
+  sessionId: string
+): Promise<string | null> {
+  const prisma = getPrisma();
+  if (!prisma || !sessionId) return null;
+  try {
+    const leadId = await ensureLeadId(sessionId);
+    if (!leadId) return null;
+    const conv = await prisma.conversation.create({ data: { leadId } });
+    return conv.id;
+  } catch (err) {
+    console.error("[leadStore] createConversation failed:", err);
+    return null;
+  }
+}
+
+export async function deleteConversation(
+  sessionId: string,
+  conversationId: string
+): Promise<void> {
+  const prisma = getPrisma();
+  if (!prisma || !sessionId) return;
+  try {
+    await prisma.conversation.deleteMany({
+      where: { id: conversationId, lead: { sessionId } },
+    });
+  } catch (err) {
+    console.error("[leadStore] deleteConversation failed:", err);
+  }
+}
+
+export async function clearConversations(sessionId: string): Promise<void> {
+  const prisma = getPrisma();
+  if (!prisma || !sessionId) return;
+  try {
+    await prisma.conversation.deleteMany({ where: { lead: { sessionId } } });
+  } catch (err) {
+    console.error("[leadStore] clearConversations failed:", err);
   }
 }
 

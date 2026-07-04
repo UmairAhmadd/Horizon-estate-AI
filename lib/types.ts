@@ -121,6 +121,8 @@ export interface SavedApiResponse {
 export interface AssistantRequest {
   message: string;
   history?: ChatMessage[];
+  /** Continue an existing DB conversation (long-term memory); omit for a new one. */
+  conversationId?: string | null;
 }
 
 /** Response body from POST /api/assistant */
@@ -132,6 +134,34 @@ export interface AssistantResponse {
   matchedProperties: MatchedProperty[];
   /** Listing URL pre-filled with the inferred filters (when matches exist). */
   searchUrl?: string;
+  /** The DB conversation this turn was saved to (present only when a DB is configured). */
+  conversationId?: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Conversations (PostgreSQL long-term memory — ChatGPT-style history)        */
+/* -------------------------------------------------------------------------- */
+
+/** A row in the chat-history sidebar. */
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  /** Purpose · location · type line, when known. */
+  summary?: string;
+  updatedAt: number;
+}
+
+/** A full conversation reloaded from the database. */
+export interface ConversationDetail {
+  id: string;
+  messages: ChatMessage[];
+  lead: LeadFields;
+}
+
+/** GET /api/conversations — tells the client whether DB memory is active. */
+export interface ConversationsResponse {
+  enabled: boolean;
+  conversations: ConversationSummary[];
 }
 
 /* -------------------------------------------------------------------------- */

@@ -88,7 +88,7 @@ export function PostPropertyModal() {
     return e;
   };
 
-  const handleSubmit = (ev: React.SyntheticEvent) => {
+  const handleSubmit = async (ev: React.SyntheticEvent) => {
     ev.preventDefault();
     const found = validate();
     if (Object.keys(found).length > 0) {
@@ -96,24 +96,39 @@ export function PostPropertyModal() {
       return;
     }
     setStatus("submitting");
-    // No backend yet — persist a local draft (never auto-published). The short
-    // delay is purely for a premium submit feel.
-    setTimeout(() => {
-      localPropertySubmissions.add({
-        ...form,
-        ownerName: form.ownerName.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        city: form.city.trim(),
-        area: form.area.trim(),
-        size: form.size.trim(),
-        price: form.price.trim(),
-        description: form.description.trim(),
-        bedrooms: showBeds ? form.bedrooms : undefined,
-        bathrooms: showBeds ? form.bathrooms : undefined,
+
+    const submission: PropertySubmission = {
+      ...form,
+      ownerName: form.ownerName.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      city: form.city.trim(),
+      area: form.area.trim(),
+      size: form.size.trim(),
+      price: form.price.trim(),
+      description: form.description.trim(),
+      bedrooms: showBeds ? form.bedrooms : undefined,
+      bathrooms: showBeds ? form.bathrooms : undefined,
+    };
+
+    // Save as a pending draft to PostgreSQL when available; otherwise (no DB /
+    // offline) fall back to a localStorage draft. Never auto-published either way.
+    try {
+      const res = await fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submission),
       });
-      setStatus("success");
-    }, 650);
+      const data = (await res.json().catch(() => null)) as
+        | { enabled?: boolean }
+        | null;
+      if (!res.ok || !data?.enabled) {
+        localPropertySubmissions.add(submission);
+      }
+    } catch {
+      localPropertySubmissions.add(submission);
+    }
+    setStatus("success");
   };
 
   if (!open) return null;

@@ -7,6 +7,7 @@ import { suggestedPrompts } from "@/lib/data";
 import type {
   AssistantResponse,
   ChatMessage,
+  ConversationSummary,
   MatchedProperty,
   SearchHistoryEntry,
 } from "@/lib/types";
@@ -15,6 +16,13 @@ import { ConciergeIcon } from "./ConciergeIcon";
 import { useSaved } from "@/context/SavedProvider";
 import { localLeadMemory } from "@/lib/leadMemory";
 import { localSearchHistory, summariseLead } from "@/lib/searchHistory";
+import {
+  clearConversationsRemote,
+  createConversationRemote,
+  deleteConversationRemote,
+  fetchConversation,
+  fetchConversations,
+} from "@/lib/chatHistory";
 
 interface Message {
   id: number;
@@ -37,12 +45,13 @@ const INTRO: Message = {
 
 async function fetchReply(
   message: string,
-  history: ChatMessage[]
+  history: ChatMessage[],
+  conversationId: string | null
 ): Promise<AssistantResponse> {
   const res = await fetch("/api/assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, conversationId }),
   });
   if (!res.ok) throw new Error(`Assistant request failed (${res.status})`);
   return (await res.json()) as AssistantResponse;
@@ -191,7 +200,14 @@ export function AIAssistant() {
   // resolves against the last matched cards instead of starting a new search.
   const pendingActionRef = useRef<ActionKind | null>(null);
 
-  // Local long-term memory: recent searches ("ChatGPT-style" history).
+  // Long-term memory. DB mode (PostgreSQL) engages when the API reports it's
+  // enabled; otherwise we use the localStorage "recent searches" fallback.
+  const [dbMode, setDbMode] = useState(false);
+  const [dbConversations, setDbConversations] = useState<ConversationSummary[]>(
+    []
+  );
+  const conversationIdRef = useRef<string | null>(null); // active DB thread
+
   const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const currentEntryRef = useRef<{
@@ -199,7 +215,36 @@ export function AIAssistant() {
     key: string;
     createdAt: number;
   } | null>(null);
-  useEffect(() => setSearchHistory(localSearchHistory.list()), []);
+
+  const refreshConversations = async () => {
+    const { enabled, conversations } = await fetchConversations();
+    setDbMode(enabled);
+    if (enabled) setDbConversations(conversations);
+  };
+
+  // Detect DB memory + load history once; fall back to localStorage.
+  useEffect(() => {
+    let active = true;
+    fetchConversations().then(({ enabled, conversations }) => {
+      if (!active) return;
+      setDbMode(enabled);
+      if (enabled) setDbConversations(conversations);
+      else setSearchHistory(localSearchHistory.list());
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Unified sidebar list (DB conversations, or local recent searches).
+  const historyItems: ConversationSummary[] = dbMode
+    ? dbConversations
+    : searchHistory.map((e) => ({
+        id: e.id,
+        title: e.title,
+        summary: e.summary,
+        updatedAt: e.updatedAt,
+      }));
 
   const openHistoryEntry = (entry: SearchHistoryEntry) => {
     setMessages([
@@ -218,12 +263,47 @@ export function AIAssistant() {
     setShowHistory(false);
   };
 
-  const removeHistoryEntry = (id: string) => {
+  // Open a past chat: reload its messages (and, in DB mode, resume the thread).
+  const openHistoryItem = async (id: string) => {
+    if (dbMode) {
+      const detail = await fetchConversation(id);
+      if (!detail) return;
+      setMessages([
+        INTRO,
+        ...detail.messages.map((m) => ({
+          id: idRef.current++,
+          role: m.role === "assistant" ? ("ai" as const) : ("user" as const),
+          text: m.content,
+        })),
+      ]);
+      conversationIdRef.current = id;
+      pendingActionRef.current = null;
+      setShowHistory(false);
+      return;
+    }
+    const entry = searchHistory.find((e) => e.id === id);
+    if (entry) openHistoryEntry(entry);
+  };
+
+  const removeHistoryItem = async (id: string) => {
+    if (dbMode) {
+      await deleteConversationRemote(id);
+      setDbConversations((prev) => prev.filter((c) => c.id !== id));
+      if (conversationIdRef.current === id) conversationIdRef.current = null;
+      return;
+    }
     setSearchHistory(localSearchHistory.remove(id));
     if (currentEntryRef.current?.id === id) currentEntryRef.current = null;
   };
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
+    if (dbMode) {
+      await clearConversationsRemote();
+      setDbConversations([]);
+      conversationIdRef.current = null;
+      setShowHistory(false);
+      return;
+    }
     localSearchHistory.clear();
     setSearchHistory([]);
     currentEntryRef.current = null;
@@ -246,6 +326,7 @@ export function AIAssistant() {
     setMessages([INTRO]);
     setInput("");
     setShowHistory(false);
+    conversationIdRef.current = null; // new chat → a new DB conversation on send
     currentEntryRef.current = null; // forget the current search thread
     pendingActionRef.current = null; // drop any pending "which one?" action
     showToast("New search started.");
@@ -404,7 +485,7 @@ export function AIAssistant() {
     setLoading(true);
 
     try {
-      const data = await fetchReply(text, history);
+      const data = await fetchReply(text, history, conversationIdRef.current);
       setMessages((m) =>
         m.map((msg) =>
           msg.id === pendingId
@@ -429,33 +510,41 @@ export function AIAssistant() {
         updatedAt: Date.now(),
       });
 
-      // Update "recent searches": continue the current entry, or start a new one
-      // when the search (city + purpose) changes.
-      const summary = summariseLead(data.lead);
-      if (summary) {
-        const prev = currentEntryRef.current;
-        const continues = prev != null && prev.key === summary.key;
-        const id = continues
-          ? prev.id
-          : `s_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const createdAt = continues ? prev.createdAt : Date.now();
-        currentEntryRef.current = { id, key: summary.key, createdAt };
-        setSearchHistory(
-          localSearchHistory.upsert({
-            id,
-            title: summary.title,
-            summary: summary.summary,
-            requirements: data.lead,
-            matchedPropertyIds: data.matchedProperties.map((mp) => mp.id),
-            messages: [
-              ...history,
-              { role: "user", content: text },
-              { role: "assistant", content: data.reply },
-            ],
-            createdAt,
-            updatedAt: Date.now(),
-          })
-        );
+      if (dbMode) {
+        // The server persisted this turn (messages + per-conversation
+        // preferences). Track the thread and refresh the sidebar.
+        conversationIdRef.current =
+          data.conversationId ?? conversationIdRef.current;
+        refreshConversations();
+      } else {
+        // localStorage "recent searches" fallback: continue the current entry,
+        // or start a new one when the search (city + purpose) changes.
+        const summary = summariseLead(data.lead);
+        if (summary) {
+          const prev = currentEntryRef.current;
+          const continues = prev != null && prev.key === summary.key;
+          const id = continues
+            ? prev.id
+            : `s_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          const createdAt = continues ? prev.createdAt : Date.now();
+          currentEntryRef.current = { id, key: summary.key, createdAt };
+          setSearchHistory(
+            localSearchHistory.upsert({
+              id,
+              title: summary.title,
+              summary: summary.summary,
+              requirements: data.lead,
+              matchedPropertyIds: data.matchedProperties.map((mp) => mp.id),
+              messages: [
+                ...history,
+                { role: "user", content: text },
+                { role: "assistant", content: data.reply },
+              ],
+              createdAt,
+              updatedAt: Date.now(),
+            })
+          );
+        }
       }
     } catch {
       setMessages((m) =>
@@ -565,10 +654,13 @@ export function AIAssistant() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowHistory((v) => !v)}
+                    onClick={() => {
+                      setShowHistory((v) => !v);
+                      if (dbMode) refreshConversations();
+                    }}
                     aria-pressed={showHistory}
-                    aria-label="Recent searches"
-                    title="Recent searches"
+                    aria-label="Chat history"
+                    title="Chat history"
                     className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors ${
                       showHistory
                         ? "border-ink bg-ink text-paper"
@@ -576,7 +668,7 @@ export function AIAssistant() {
                     }`}
                   >
                     <ClockIcon className="h-3.5 w-3.5" />
-                    Recent
+                    Chats
                   </button>
                   <button
                     type="button"
@@ -620,12 +712,14 @@ export function AIAssistant() {
               </div>
             )}
 
-            {/* Recent searches (local long-term memory) — kept out of the chat */}
+            {/* Chat history sidebar (PostgreSQL when available, else local) */}
             {showHistory ? (
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 <div className="flex items-center justify-between">
-                  <p className="eyebrow">Recent searches</p>
-                  {searchHistory.length > 0 && (
+                  <p className="eyebrow">
+                    {dbMode ? "Your chats" : "Recent searches"}
+                  </p>
+                  {historyItems.length > 0 && (
                     <button
                       type="button"
                       onClick={clearHistory}
@@ -636,18 +730,18 @@ export function AIAssistant() {
                   )}
                 </div>
 
-                {searchHistory.length === 0 ? (
+                {historyItems.length === 0 ? (
                   <p className="mt-6 text-sm leading-relaxed text-stone">
-                    No recent searches yet — your searches will show up here so
-                    you can pick up where you left off.
+                    No chats yet — your conversations will show up here so you can
+                    pick up where you left off.
                   </p>
                 ) : (
                   <ul className="mt-4 space-y-2">
-                    {searchHistory.map((e) => (
+                    {historyItems.map((e) => (
                       <li key={e.id} className="group relative">
                         <button
                           type="button"
-                          onClick={() => openHistoryEntry(e)}
+                          onClick={() => openHistoryItem(e.id)}
                           className="w-full rounded-xl border border-line bg-white p-3 pr-9 text-left transition-colors hover:border-ink/25"
                         >
                           <p className="truncate text-sm font-semibold text-ink">
@@ -661,8 +755,8 @@ export function AIAssistant() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeHistoryEntry(e.id)}
-                          aria-label="Remove search"
+                          onClick={() => removeHistoryItem(e.id)}
+                          aria-label="Remove chat"
                           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-stone opacity-0 transition hover:bg-ink/5 hover:text-ink group-hover:opacity-100"
                         >
                           <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>

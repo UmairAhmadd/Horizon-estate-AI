@@ -46,40 +46,42 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  preferences     LeadPreference?
   conversations   Conversation[]
   savedProperties SavedProperty[]
 
   @@map("leads")
 }
 
-/// Latest extracted requirements for a lead (one row per lead).
+/// Extracted requirements for a single conversation (one row per conversation).
 model LeadPreference {
-  id           String   @id @default(cuid())
-  leadId       String   @unique
-  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  location     String?
-  area         String?
-  propertyType String?
-  purpose      String?
-  saleBudget   Int?
-  rentBudget   Int?
-  bedrooms     Int?
-  size         String?
-  timeline     String?
-  updatedAt    DateTime @updatedAt
+  id             String       @id @default(cuid())
+  conversationId String       @unique
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  city           String?
+  area           String?
+  propertyType   String?
+  purpose        String?
+  saleBudget     Int? // max purchase price, PKR
+  rentBudget     Int? // max monthly rent, PKR
+  bedrooms       Int?
+  size           String?
+  timeline       String?
+  updatedAt      DateTime     @updatedAt
 
   @@map("lead_preferences")
 }
 
-/// A chat thread for a lead.
+/// A chat thread for a lead (ChatGPT-style — many per lead).
 model Conversation {
   id        String   @id @default(cuid())
   leadId    String
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  title     String? // derived from the first user message
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  messages Message[]
+  messages   Message[]
+  preference LeadPreference?
 
   @@index([leadId])
   @@map("conversations")
@@ -110,4 +112,29 @@ model SavedProperty {
 
   @@unique([leadId, propertyId])
   @@map("saved_properties")
+}
+
+/// Owner/agent listing submissions ("Post a property"). Never auto-published —
+/// a review step flips status to "approved".
+model PostedPropertyDraft {
+  id            String   @id @default(cuid())
+  sessionId     String
+  ownerName     String
+  email         String?
+  phone         String?
+  city          String
+  area          String?
+  purpose       String // "sell" | "rent"
+  propertyType  String
+  size          String
+  expectedPrice String? // asking price (purpose = "sell")
+  monthlyRent   String? // monthly rent (purpose = "rent")
+  bedrooms      Int?
+  bathrooms     Int?
+  description   String?
+  status        String   @default("pending") // pending | approved | rejected
+  createdAt     DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("posted_property_drafts")
 }

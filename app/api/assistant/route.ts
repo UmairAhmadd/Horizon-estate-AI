@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateAssistantResponse } from "@/lib/leadEngine";
 import { dbEnabled } from "@/lib/db";
-import { loadLeadPreferences, recordTurn } from "@/lib/server/leadStore";
+import { loadConversationLead, recordTurn } from "@/lib/server/leadStore";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
@@ -49,6 +49,8 @@ export async function POST(request: Request) {
   }
 
   const history = isValidHistory(body.history) ? body.history : [];
+  const conversationId =
+    typeof body.conversationId === "string" ? body.conversationId : null;
 
   // Long-term memory only engages when a database is configured. Without it,
   // this path is unchanged (no cookie, no persistence).
@@ -56,25 +58,34 @@ export async function POST(request: Request) {
   let priorLead: LeadFields | null = null;
   if (dbEnabled) {
     sessionId = readSessionId(request) ?? newSessionId();
-    priorLead = await loadLeadPreferences(sessionId);
+    // Continue a thread → load its stored lead context; new thread → fresh.
+    priorLead = await loadConversationLead(sessionId, conversationId);
   }
 
   // Delegates to an OpenAI-compatible provider when configured, else the mock.
   const response = await generateAssistantResponse(message, history, priorLead);
 
-  const res = NextResponse.json(response, { status: 200 });
-
   if (dbEnabled && sessionId) {
-    await recordTurn({ sessionId, userMessage: message, response });
+    // Persist the turn; recordTurn creates the conversation when needed and
+    // returns its id so the client keeps writing to the same thread.
+    const savedId = await recordTurn({
+      sessionId,
+      conversationId,
+      userMessage: message,
+      response,
+    });
+    response.conversationId = savedId;
+    const res = NextResponse.json(response, { status: 200 });
     res.cookies.set(SESSION_COOKIE, sessionId, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
       maxAge: SESSION_MAX_AGE,
     });
+    return res;
   }
 
-  return res;
+  return NextResponse.json(response, { status: 200 });
 }
 
 // Guard other verbs with a clear signal rather than a default 404/500.

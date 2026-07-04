@@ -34,8 +34,10 @@ export default function PropertiesPage({
             </h1>
             <p className="mt-3 text-stone">
               {results.length}{" "}
-              {results.length === 1 ? "property" : "properties"} match your
-              search.
+              {results.length === 1
+                ? "property matches"
+                : "properties match"}{" "}
+              your search.
             </p>
           </header>
 
