@@ -18,11 +18,11 @@ import { localLeadMemory } from "@/lib/leadMemory";
 import { localSearchHistory, summariseLead } from "@/lib/searchHistory";
 import {
   clearConversationsRemote,
-  createConversationRemote,
   deleteConversationRemote,
   fetchConversation,
   fetchConversations,
 } from "@/lib/chatHistory";
+import { useBodyScrollLock } from "@/lib/scrollLock";
 
 interface Message {
   id: number;
@@ -71,11 +71,33 @@ function parseActionKind(text: string): ActionKind | null {
   ) {
     return "schedule";
   }
-  if (/\b(save|shortlist|bookmark)\b/.test(t)) return "save";
+
+  // A message that states search criteria (sizes, budgets, bed counts) is a
+  // search, even if it happens to contain an action verb.
+  const looksLikeSearch = /\d+\s*(marla|kanal|lakh|lac|crore|cr|million|bed|bhk|sq)/.test(
+    t
+  );
+  if (looksLikeSearch) return null;
+
+  // "save …" must be about a listing — never "save money/up/time".
   if (
-    /\bview details\b|\bshow details\b|\bmore details\b|\bsee details\b|\bopen details\b|\bview it\b|\bopen it\b|\bopen (the )?(property|listing|this|that)\b|\bview (the )?(property|listing|this|that|details)\b|\bdetails\b/.test(
+    /\b(save|shortlist|bookmark)\b/.test(t) &&
+    !/\b(save|saving)\s+(money|up|cash|time)\b/.test(t) &&
+    (/^(save|shortlist|bookmark)\b/.test(t.trim()) ||
+      /\b(it|this|that|one|first|second|third|last|property|properties|listing|home)\b/.test(
+        t
+      ))
+  ) {
+    return "save";
+  }
+
+  // "view/show/open …" needs an explicit details/listing object — a bare
+  // word like "details" inside a longer search sentence must not hijack it.
+  if (
+    /\b(view|show|see|open)\b.{0,24}\b(details?|listing|property|it|this|that)\b/.test(
       t
-    )
+    ) ||
+    /\b(more|full) details\b/.test(t)
   ) {
     return "view";
   }
@@ -90,15 +112,19 @@ function resolveTarget(
   if (latest.length === 0) return null;
   if (latest.length === 1) return latest[0];
   const t = text.toLowerCase();
-  const ord = /\b(first|1st|one|#?1)\b/.test(t)
-    ? 0
-    : /\b(second|2nd|two|#?2)\b/.test(t)
-      ? 1
-      : /\b(third|3rd|three|#?3)\b/.test(t)
-        ? 2
-        : /\blast\b/.test(t)
-          ? latest.length - 1
-          : null;
+
+  // Ordinal words: check second/third BEFORE first — "the second one" contains
+  // "one" and must resolve to #2. Bare digits count only when the whole message
+  // is that digit ("2", "#3"), so bed/budget numbers are never misread.
+  const digit = /^#?([1-9])$/.exec(t.trim());
+  let ord: number | null = digit ? parseInt(digit[1], 10) - 1 : null;
+  if (ord === null) {
+    if (/\b(second|2nd)\b/.test(t)) ord = 1;
+    else if (/\b(third|3rd)\b/.test(t)) ord = 2;
+    else if (/\b(fourth|4th)\b/.test(t)) ord = 3;
+    else if (/\blast\b/.test(t)) ord = latest.length - 1; // before "one": "last one"
+    else if (/\b(first|1st|one)\b/.test(t)) ord = 0;
+  }
   if (ord !== null && ord >= 0 && ord < latest.length) return latest[ord];
   const named = latest.find((p) => t.includes(p.title.toLowerCase()));
   return named ?? null;
@@ -184,12 +210,13 @@ export function AIAssistant() {
     });
   }, [messages, open]);
 
-  // Lock body scroll while the drawer is open.
+  // Lock body scroll (shared/refcounted) + close on Escape while open.
+  useBodyScrollLock(open);
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   // Saved shortlist ids feed into the persisted lead memory; toggle/isSaved let
@@ -247,24 +274,34 @@ export function AIAssistant() {
       }));
 
   const openHistoryEntry = (entry: SearchHistoryEntry) => {
-    setMessages([
-      INTRO,
-      ...entry.messages.map((m) => ({
-        id: idRef.current++,
-        role: m.role === "assistant" ? ("ai" as const) : ("user" as const),
-        text: m.content,
-      })),
-    ]);
+    const restored: Message[] = entry.messages.map((m) => ({
+      id: idRef.current++,
+      role: m.role === "assistant" ? ("ai" as const) : ("user" as const),
+      text: m.content,
+    }));
+    // Re-attach the entry's result cards to its final assistant message so the
+    // reopened search still shows matches (and actions keep working).
+    if (entry.matches && entry.matches.length > 0) {
+      for (let i = restored.length - 1; i >= 0; i--) {
+        if (restored[i].role === "ai") {
+          restored[i] = { ...restored[i], matches: entry.matches };
+          break;
+        }
+      }
+    }
+    setMessages([INTRO, ...restored]);
     currentEntryRef.current = {
       id: entry.id,
       key: summariseLead(entry.requirements)?.key ?? entry.id,
       createdAt: entry.createdAt,
     };
+    pendingActionRef.current = null;
     setShowHistory(false);
   };
 
   // Open a past chat: reload its messages (and, in DB mode, resume the thread).
   const openHistoryItem = async (id: string) => {
+    if (loading) return; // don't swap threads while a reply is in flight
     if (dbMode) {
       const detail = await fetchConversation(id);
       if (!detail) return;
@@ -274,6 +311,8 @@ export function AIAssistant() {
           id: idRef.current++,
           role: m.role === "assistant" ? ("ai" as const) : ("user" as const),
           text: m.content,
+          // Cards rehydrated server-side from the stored matchedIds.
+          matches: m.matches,
         })),
       ]);
       conversationIdRef.current = id;
@@ -323,6 +362,7 @@ export function AIAssistant() {
   // state is cleared — saved shortlist, recent searches, and local long-term
   // memory are all preserved.
   const startNewChat = () => {
+    if (loading) return; // don't reset mid-reply — the turn would land in limbo
     setMessages([INTRO]);
     setInput("");
     setShowHistory(false);
@@ -510,11 +550,13 @@ export function AIAssistant() {
         updatedAt: Date.now(),
       });
 
-      if (dbMode) {
-        // The server persisted this turn (messages + per-conversation
-        // preferences). Track the thread and refresh the sidebar.
-        conversationIdRef.current =
-          data.conversationId ?? conversationIdRef.current;
+      // Trust the response over the (possibly stale) dbMode flag: the server
+      // returns a conversationId whenever a database persisted this turn. This
+      // avoids a mount-time race where dbMode is still false during the first
+      // send, which would drop the id and split the chat into two DB threads.
+      if (data.conversationId) {
+        conversationIdRef.current = data.conversationId;
+        if (!dbMode) setDbMode(true);
         refreshConversations();
       } else {
         // localStorage "recent searches" fallback: continue the current entry,
@@ -528,6 +570,7 @@ export function AIAssistant() {
             : `s_${Date.now()}_${Math.random().toString(36).slice(2)}`;
           const createdAt = continues ? prev.createdAt : Date.now();
           currentEntryRef.current = { id, key: summary.key, createdAt };
+          const prevEntry = searchHistory.find((e) => e.id === id);
           setSearchHistory(
             localSearchHistory.upsert({
               id,
@@ -540,6 +583,12 @@ export function AIAssistant() {
                 { role: "user", content: text },
                 { role: "assistant", content: data.reply },
               ],
+              // Keep the latest non-empty match set so reopening this search
+              // still shows its result cards.
+              matches:
+                data.matchedProperties.length > 0
+                  ? data.matchedProperties
+                  : prevEntry?.matches,
               createdAt,
               updatedAt: Date.now(),
             })
@@ -782,7 +831,7 @@ export function AIAssistant() {
                 if (m.role === "user") {
                   return (
                     <div key={m.id} className="flex justify-end">
-                      <p className="max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm leading-relaxed text-paper">
+                      <p className="max-w-[85%] break-words rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm leading-relaxed text-paper [overflow-wrap:anywhere]">
                         {m.text}
                       </p>
                     </div>
@@ -794,7 +843,7 @@ export function AIAssistant() {
                 return (
                   <div key={m.id} className="space-y-3">
                     <div className="flex justify-start">
-                      <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-line bg-white px-4 py-2.5 text-sm leading-relaxed text-ink">
+                      <div className="max-w-[88%] break-words rounded-2xl rounded-bl-md border border-line bg-white px-4 py-2.5 text-sm leading-relaxed text-ink [overflow-wrap:anywhere]">
                         {m.pending ? <TypingDots /> : <p>{m.text}</p>}
                       </div>
                     </div>

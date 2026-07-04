@@ -19,8 +19,8 @@ import type { PropertyDraft, PropertySubmission } from "./types";
  */
 export interface PropertySubmissionRepository {
   list(): PropertyDraft[];
-  /** Persist a new submission as a `pending` draft and return it. */
-  add(submission: PropertySubmission): PropertyDraft;
+  /** Persist a new submission as a `pending` draft; null if storage failed. */
+  add(submission: PropertySubmission): PropertyDraft | null;
   remove(id: string): PropertyDraft[];
   clear(): void;
 }
@@ -40,12 +40,14 @@ function read(): PropertyDraft[] {
   }
 }
 
-function write(items: PropertyDraft[]) {
-  if (typeof window === "undefined") return;
+function write(items: PropertyDraft[]): boolean {
+  if (typeof window === "undefined") return false;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    return true;
   } catch {
-    // ignore quota / private-mode failures
+    // quota / private-mode failure — report it so callers can tell the user
+    return false;
   }
 }
 
@@ -60,8 +62,7 @@ export const localPropertySubmissions: PropertySubmissionRepository = {
       status: "pending",
       createdAt: Date.now(),
     };
-    write([draft, ...read()]);
-    return draft;
+    return write([draft, ...read()]) ? draft : null;
   },
   remove(id) {
     const next = read().filter((d) => d.id !== id);

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PropertySubmission, SubmissionPurpose } from "@/lib/types";
 import { localPropertySubmissions } from "@/lib/propertySubmissions";
+import { useBodyScrollLock } from "@/lib/scrollLock";
 
 const PROPERTY_TYPES = ["House", "Apartment", "Plot", "Commercial"] as const;
 
@@ -46,16 +47,13 @@ export function PostPropertyModal() {
     return () => window.removeEventListener("horizon:post-property", handler);
   }, []);
 
-  // Lock body scroll + close on Escape while open.
+  // Lock body scroll (shared/refcounted) + close on Escape while open.
+  useBodyScrollLock(open);
   useEffect(() => {
     if (!open) return;
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   const showBeds = useMemo(
@@ -113,6 +111,7 @@ export function PostPropertyModal() {
 
     // Save as a pending draft to PostgreSQL when available; otherwise (no DB /
     // offline) fall back to a localStorage draft. Never auto-published either way.
+    let stored = false;
     try {
       const res = await fetch("/api/submissions", {
         method: "POST",
@@ -120,13 +119,24 @@ export function PostPropertyModal() {
         body: JSON.stringify(submission),
       });
       const data = (await res.json().catch(() => null)) as
-        | { enabled?: boolean }
+        | { enabled?: boolean; draft?: unknown }
         | null;
-      if (!res.ok || !data?.enabled) {
-        localPropertySubmissions.add(submission);
+      if (res.ok && data?.enabled && data.draft) {
+        stored = true;
+      } else {
+        stored = localPropertySubmissions.add(submission) !== null;
       }
     } catch {
-      localPropertySubmissions.add(submission);
+      stored = localPropertySubmissions.add(submission) !== null;
+    }
+    if (!stored) {
+      // Both the API and local storage failed — never show a false success.
+      setErrors({
+        contact:
+          "We couldn't save your submission just now — please try again in a moment.",
+      });
+      setStatus("idle");
+      return;
     }
     setStatus("success");
   };

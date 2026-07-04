@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "./ui/Button";
 import { useSaved } from "@/context/SavedProvider";
+import { useBodyScrollLock } from "@/lib/scrollLock";
 
 function SavedButton({ solid }: { solid: boolean }) {
   const { count, openDrawer } = useSaved();
@@ -43,6 +44,7 @@ function openPostProperty() {
 // Blog sections don't exist yet, so they're intentionally omitted rather than
 // left as dead anchors.) Absolute hrefs so they work from any route.
 const links = [
+  { label: "Home", href: "/" },
   { label: "Properties", href: "/properties" },
   { label: "Company", href: "/#company" },
 ];
@@ -59,13 +61,8 @@ export function Navbar({ overlay = true }: { overlay?: boolean }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, [overlay]);
 
-  // Lock body scroll when the mobile drawer is open
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
+  // Lock body scroll when the mobile drawer is open (shared/refcounted).
+  useBodyScrollLock(open);
 
   // On non-overlay pages (no hero behind), the bar is always solid.
   const solid = !overlay || scrolled || open;

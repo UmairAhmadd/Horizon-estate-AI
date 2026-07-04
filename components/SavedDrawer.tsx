@@ -4,20 +4,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useSaved } from "@/context/SavedProvider";
+import { useBodyScrollLock } from "@/lib/scrollLock";
 
 export function SavedDrawer() {
   const { items, count, isOpen, closeDrawer, remove, clear } = useSaved();
 
-  // Lock body scroll + close on Escape while open.
+  // Lock body scroll (shared/refcounted) + close on Escape while open.
+  useBodyScrollLock(isOpen);
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeDrawer();
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, closeDrawer]);
 
   return (

@@ -11,7 +11,15 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 export function readSessionId(request: Request): string | undefined {
   const cookie = request.headers.get("cookie") ?? "";
   const match = cookie.match(/(?:^|;\s*)horizon_sid=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : undefined;
+  if (!match) return undefined;
+  // A malformed percent-encoding must not turn into a 500 — treat it as no session.
+  try {
+    const sid = decodeURIComponent(match[1]);
+    // Sanity-cap: session ids are UUID-sized; reject junk/oversized values.
+    return sid.length > 0 && sid.length <= 128 ? sid : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function newSessionId(): string {

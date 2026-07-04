@@ -26,12 +26,27 @@ const MAX_ENTRIES = 12;
 const byNewest = (a: SearchHistoryEntry, b: SearchHistoryEntry) =>
   b.updatedAt - a.updatedAt;
 
+// Guard against corrupt-but-valid-JSON shapes ([null], entries missing fields)
+// so a bad localStorage value can never crash the concierge render.
+function isEntry(v: unknown): v is SearchHistoryEntry {
+  if (!v || typeof v !== "object") return false;
+  const e = v as Record<string, unknown>;
+  return (
+    typeof e.id === "string" &&
+    typeof e.title === "string" &&
+    typeof e.updatedAt === "number" &&
+    Array.isArray(e.messages) &&
+    typeof e.requirements === "object" &&
+    e.requirements !== null
+  );
+}
+
 function read(): SearchHistoryEntry[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as SearchHistoryEntry[]) : [];
+    return Array.isArray(parsed) ? parsed.filter(isEntry) : [];
   } catch {
     return [];
   }

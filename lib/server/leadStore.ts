@@ -4,12 +4,14 @@ import type {
   LeadPreference as PrismaLeadPreference,
 } from "@prisma/client";
 import { getPrisma } from "../db";
+import { getPropertyById } from "../data";
 import type {
   AssistantResponse,
-  ChatMessage,
   ConversationDetail,
+  ConversationMessage,
   ConversationSummary,
   LeadFields,
+  MatchedProperty,
   SavedProperty,
 } from "../types";
 
@@ -59,9 +61,14 @@ function locationOf(area: string | null, city: string | null): string | undefine
   return [area, city].filter(Boolean).join(", ") || undefined;
 }
 
+// Postgres int4 ceiling — budgets beyond this (≥ ~214 crore) can't be stored in
+// the Int columns; store null rather than throwing and losing the whole turn.
+const MAX_INT4 = 2_147_483_647;
+
 /** LeadFields -> lead_preferences columns. */
 function toPreferenceData(lead: LeadFields) {
-  const pkr = budgetToPkr(lead.budget);
+  const raw = budgetToPkr(lead.budget);
+  const pkr = raw !== undefined && raw <= MAX_INT4 ? raw : undefined;
   const rent = isRentIntent(lead.purpose);
   const { city, area } = splitLocation(lead.location);
   return {
@@ -79,7 +86,9 @@ function toPreferenceData(lead: LeadFields) {
 
 /** Emit a budget string the lead engine can parse back (e.g. "Under PKR 2 Crore"). */
 function pkrToBudgetLabel(n: number, rent: boolean): string {
-  const trim = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  // Exact to 2 decimals (lakh precision on crores) — no toFixed(1) rounding,
+  // which would inflate e.g. 1.25 Crore to "1.3 Crore" and loosen the budget cap.
+  const trim = (x: number) => String(Math.round(x * 100) / 100);
   let label: string;
   if (n >= 10_000_000) label = `Under PKR ${trim(n / 10_000_000)} Crore`;
   else if (n >= 100_000) label = `Under PKR ${trim(n / 100_000)} Lakh`;
@@ -196,12 +205,8 @@ export async function recordTurn(args: {
       conversationId = conv.id;
     }
 
-    await prisma.leadPreference.upsert({
-      where: { conversationId },
-      create: { conversationId, ...toPreferenceData(args.response.lead) },
-      update: toPreferenceData(args.response.lead),
-    });
-
+    // Messages first — they're the record of what was said and must survive
+    // even if the preference upsert fails (e.g. a value a column can't hold).
     await prisma.message.createMany({
       data: [
         { conversationId, role: "user", content: args.userMessage, matchedIds: [] },
@@ -214,10 +219,23 @@ export async function recordTurn(args: {
       ],
     });
 
-    // Bump updatedAt (and backfill the title if the conversation was created empty).
+    try {
+      await prisma.leadPreference.upsert({
+        where: { conversationId },
+        create: { conversationId, ...toPreferenceData(args.response.lead) },
+        update: toPreferenceData(args.response.lead),
+      });
+    } catch (err) {
+      console.error("[leadStore] preference upsert failed (messages kept):", err);
+    }
+
+    // Bump updatedAt explicitly — Prisma does NOT touch @updatedAt on an
+    // empty-data update, and the sidebar orders newest-first by this column.
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: needsTitle ? { title: deriveTitle(args.userMessage) } : {},
+      data: needsTitle
+        ? { title: deriveTitle(args.userMessage) }
+        : { updatedAt: new Date() },
     });
 
     return conversationId;
@@ -291,9 +309,32 @@ export async function getConversation(
       },
     });
     if (!conv) return null;
-    const messages: ChatMessage[] = conv.messages.map((m) => ({
+    const messages: ConversationMessage[] = conv.messages.map((m) => ({
       role: m.role === "assistant" ? "assistant" : "user",
       content: m.content,
+      // Rehydrate the matched cards from the stored ids, so a reopened chat
+      // keeps its results (and "view details"/"save" commands keep working).
+      matches:
+        m.role === "assistant" && m.matchedIds.length > 0
+          ? m.matchedIds
+              .map((pid): MatchedProperty | null => {
+                const p = getPropertyById(pid);
+                return p
+                  ? {
+                      id: p.id,
+                      title: p.title,
+                      location: p.location,
+                      price: p.displayPrice,
+                      image: p.images[0] ?? "",
+                      beds: p.bedrooms,
+                      baths: p.bathrooms,
+                      area: p.size,
+                      reason: "matched in this conversation",
+                    }
+                  : null;
+              })
+              .filter((x): x is MatchedProperty => x !== null)
+          : undefined,
     }));
     return { id: conv.id, messages, lead: prefToLead(conv.preference) };
   } catch (err) {

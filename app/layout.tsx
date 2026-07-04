@@ -5,6 +5,7 @@ import { SavedProvider } from "@/context/SavedProvider";
 import { AIAssistant } from "@/components/AIAssistant";
 import { SavedDrawer } from "@/components/SavedDrawer";
 import { PostPropertyModal } from "@/components/PostPropertyModal";
+import { SplashIntro } from "@/components/SplashIntro";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -33,6 +34,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
       <body className="bg-paper text-ink font-sans antialiased">
+        {/* Brand splash — curtain-reveals the page on every full load */}
+        <SplashIntro />
         <SavedProvider>
           {children}
           {/* Global overlays — available on every route */}

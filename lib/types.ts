@@ -151,10 +151,16 @@ export interface ConversationSummary {
   updatedAt: number;
 }
 
+/** A chat message reloaded from the database, with any matched cards rehydrated. */
+export interface ConversationMessage extends ChatMessage {
+  /** Matched property cards for this assistant turn (rebuilt from matchedIds). */
+  matches?: MatchedProperty[];
+}
+
 /** A full conversation reloaded from the database. */
 export interface ConversationDetail {
   id: string;
-  messages: ChatMessage[];
+  messages: ConversationMessage[];
   lead: LeadFields;
 }
 
@@ -184,6 +190,8 @@ export interface SearchHistoryEntry {
   matchedPropertyIds: string[];
   /** Snapshot of the conversation so it can be reopened. */
   messages: ChatMessage[];
+  /** Snapshot of the last matched cards, so a reopened chat keeps its results. */
+  matches?: MatchedProperty[];
   createdAt: number;
   updatedAt: number;
 }

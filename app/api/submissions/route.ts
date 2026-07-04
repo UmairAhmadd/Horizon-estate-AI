@@ -55,7 +55,12 @@ export async function POST(request: Request) {
   }
   const sessionId = readSessionId(request) ?? newSessionId();
   const draft = await addSubmission(sessionId, body);
-  const res = NextResponse.json({ enabled: true, draft });
+  if (!draft) {
+    // DB write failed — report enabled:false so the client persists the draft
+    // to localStorage instead of silently losing the submission.
+    return NextResponse.json({ enabled: false, draft: null });
+  }
+  const res = NextResponse.json({ enabled: true, draft }, { status: 201 });
   res.cookies.set(SESSION_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: "lax",
